@@ -56,6 +56,11 @@ public enum Platform {
 	LINUX_UKNOWN(OperatingSystem.LINUX, Architecture.UNKNOWN, "linux32", ".so", ""),
 
 	/**
+	 * Identified the Haiku OS on the Intel x86 64-bit platform 
+	 */
+	HAIKU_64(OperatingSystem.HAIKU, Architecture.X86_64, "haiku64", ".so", ""),
+
+	/**
 	 * Identifies a Mac OS X for the Intel x86 32-bit platform.
 	 */
 	MAC_OSX_32(OperatingSystem.MAC_OS_X, Architecture.X86, "osx32", ".dylib", ""),
@@ -144,6 +149,13 @@ public enum Platform {
 			paths.add("/usr/lib");
 			paths.add("/usr/X11R6/bin");
 			paths.add("/usr/X11R6/lib");
+		}
+		else if (CURRENT_PLATFORM == HAIKU_64) {
+			paths.add("/system/bin");
+			paths.add("/system/apps");
+			paths.add("/system/lib");
+			paths.add("/system/non-packaged/bin");
+			paths.add("/system/non-packaged/lib");
 		}
 		else if (CURRENT_PLATFORM == WIN_64) {
 			String windir = System.getenv("SystemRoot");

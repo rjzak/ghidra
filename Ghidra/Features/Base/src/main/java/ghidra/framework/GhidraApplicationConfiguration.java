@@ -64,8 +64,13 @@ public class GhidraApplicationConfiguration extends HeadlessGhidraApplicationCon
 
 		// Set the dock icon for macOS
 		if (Taskbar.isTaskbarSupported()) {
-			Taskbar taskbar = Taskbar.getTaskbar();
-			if (taskbar.isSupported(Taskbar.Feature.ICON_IMAGE)) {
+			Taskbar taskbar = null;
+			try {
+				taskbar = Taskbar.getTaskbar();
+			} catch (Exception ex) {
+				System.err.println("Exception caught making Taskbar.");
+			}
+			if (taskbar != null && taskbar.isSupported(Taskbar.Feature.ICON_IMAGE)) {
 				taskbar.setIconImage(ApplicationInformationDisplayFactory.getLargestWindowIcon());
 			}
 		}

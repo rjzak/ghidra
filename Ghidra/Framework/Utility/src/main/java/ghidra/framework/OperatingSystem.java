@@ -20,6 +20,7 @@ public enum OperatingSystem {
 	WINDOWS("Windows"),
 	LINUX("Linux"),
 	MAC_OS_X("Mac OS X"),
+	HAIKU("Haiku"),
 	UNSUPPORTED("Unsupported Operating System");
 
 	/**

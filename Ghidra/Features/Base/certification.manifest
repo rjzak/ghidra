@@ -33,6 +33,7 @@ data/parserprofiles/generic_clib_32.prf||GHIDRA||||END|
 data/parserprofiles/generic_clib_64.prf||GHIDRA||||END|
 data/parserprofiles/linux_32.prf||GHIDRA||||END|
 data/parserprofiles/linux_64.prf||GHIDRA||||END|
+data/parserprofiles/haiku.prf||GHIDRA||||END|
 data/parserprofiles/objc_mac_carbon.prf||GHIDRA||reviewed||END|
 data/parserprofiles/vs12Local.prf||GHIDRA||||END|
 data/stringngrams/StringModel.sng||GHIDRA||reviewed||END|

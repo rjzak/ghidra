@@ -24,6 +24,10 @@ model {
 			architecture 'x86_64'
 			operatingSystem 'osx'
 		}
+		haiku64 {
+			architecture 'x86_64'
+			operatingSystem 'haiku'
+		}
 	}	
 }
 
@@ -64,6 +68,7 @@ model {
 			targetPlatform "win64"
 			targetPlatform "linux64"
 			targetPlatform "osx64"
+			targetPlatform "haiku64"
 			sources {
 				c {
 					source {

@@ -71,6 +71,10 @@ model {
 			architecture 'x86_64'
 			operatingSystem 'osx'
 		}
+		haiku64 {
+			architecture 'x86_64'
+			operatingSystem 'haiku'
+		}
 	}	
 }
 

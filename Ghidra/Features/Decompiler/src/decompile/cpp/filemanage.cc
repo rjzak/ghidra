@@ -26,6 +26,10 @@ extern "C" {
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <dirent.h>
+#ifdef __HAIKU__
+#include <kernel/fs_attr.h>
+#endif
+
 }
 #endif
 
@@ -237,13 +241,22 @@ void FileManage::directoryList(vector<string> &res,const string &dirname,bool al
   if (dir == (DIR *)0) return;
   entry = readdir(dir);
   while(entry != (struct dirent *)0) {
-    if (entry->d_type == DT_DIR) {
+  	#ifdef __HAIKU__
+  	  DIR *tmpDir;
+  	  tmpDir = opendir(entry->d_name);
+  	  if (fs_read_attr_dir(tmpDir) == NULL && errno == B_NOT_A_DIRECTORY) {
+  	#else
+      if (entry->d_type == DT_DIR) {
+    #endif
       string fullname(entry->d_name);
       if ((fullname!=".")&&(fullname!="..")) {
-	if (allowdot || (fullname[0] != '.'))
-	  res.push_back( dirfinal + fullname );
+	    if (allowdot || (fullname[0] != '.'))
+	      res.push_back( dirfinal + fullname );
       }
     }
+    #ifdef __HAIKU__
+      closedir(tmpDir);
+    #endif
     entry = readdir(dir);
   }
   closedir(dir);

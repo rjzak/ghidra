@@ -75,7 +75,9 @@ task buildDecompilerDocumentationPdfs(type: Exec) {
 
 	// Check the OS before enabling task.
 	if (!(org.gradle.internal.os.OperatingSystem.current().isLinux() 
-		|| org.gradle.internal.os.OperatingSystem.current().isMacOsX())) {
+		|| org.gradle.internal.os.OperatingSystem.current().isMacOsX()
+		//|| org.gradle.internal.os.OperatingSystem.current().isUnix()
+		)) {
 			println "The '$it.name' task only works on Linux or Mac Os X and is therefore disabled."
 			it.enabled = false
 	}
@@ -245,6 +247,7 @@ model {
 			targetPlatform "win64"
 			targetPlatform "linux64"
 			targetPlatform "osx64"
+			targetPlatform "haiku64"
 			sources {
 				cpp {
 		            source {
@@ -342,6 +345,7 @@ model {
 			targetPlatform "win64"
 			targetPlatform "linux64"
 			targetPlatform "osx64"
+			targetPlatform "haiku64"
 			sources {
 				cpp {
 					source {

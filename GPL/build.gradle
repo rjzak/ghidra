@@ -30,6 +30,11 @@ String getCurrentPlatformName() {
 			return 'osx64'
 		}
 	}
+	else if (osName.startsWith("Haiku")) {
+		if (isX86_64) {
+			return 'haiku64'
+		}
+	}
 	throw new GradleException("Unrecognized current platform -> osName = $osName, archName = $archName")
 }
 /******************************************************************************************

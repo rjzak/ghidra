@@ -30,7 +30,7 @@ includeProject('GhidraDocs', '.', true)
 /*******************************************************************************************
  * Include modules that are deactivated by default
  *******************************************************************************************/
-//includeProjects('GhidraBuild/EclipsePlugins/GhidraDev') // requires Eclipse PDE
+includeProjects('GhidraBuild/EclipsePlugins/GhidraDev') // requires Eclipse PDE
 
 /*******************************************************************************************
  * Apply additional Ghidra respositories

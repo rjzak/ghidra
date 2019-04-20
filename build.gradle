@@ -58,7 +58,7 @@ apply from: "gradleScripts/setupJacoco.gradle" // Has a dependecy on ext vars in
  *		project.OS_NAMES.each {...}
  ****************************************************************************/
 
-project.ext.set("OS_NAMES", ["osx64", "win32", "win64", "linux64"])
+project.ext.set("OS_NAMES", ["osx64", "win32", "win64", "linux64", "haiku64"])
 
 /*********************************************************************************
  * Imports
@@ -132,6 +132,14 @@ def isWindows(String platformName) {
 	else {
 		return false
 	}
+}
+
+def isHaiku(String platformName) {
+    if (platformName.startsWith("haiku")) {
+        return true
+    } else {
+        return false
+    }
 }
 
 /******************************************************************************************
@@ -280,6 +288,11 @@ String getCurrentPlatformName() {
 			return 'osx64'
 		}
 	}
+        else if (osName.startsWith("Haiku")) {
+                if (isX86_64) {
+                        return 'haiku64'
+                }
+        }
 	throw new GradleException("Unrecognized current platform -> osName = $osName, archName = $archName")
 }
 
