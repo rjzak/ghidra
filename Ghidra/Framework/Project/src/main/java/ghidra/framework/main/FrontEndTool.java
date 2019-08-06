@@ -38,6 +38,7 @@ import docking.action.DockingAction;
 import docking.action.MenuData;
 import docking.help.Help;
 import docking.help.HelpService;
+import docking.tool.ToolConstants;
 import docking.util.AnimationUtils;
 import docking.widgets.OptionDialog;
 import generic.jar.ResourceFile;
@@ -225,8 +226,8 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 	}
 
 	private void initFrontEndOptions() {
-		ToolOptions options = getOptions("Tool");
-		HelpLocation help = new HelpLocation("Tool", "Save_Tool");
+		ToolOptions options = getOptions(ToolConstants.TOOL_OPTIONS);
+		HelpLocation help = new HelpLocation(ToolConstants.TOOL_HELP_TOPIC, "Save_Tool");
 
 		options.registerOption(AUTOMATICALLY_SAVE_TOOLS, true, help,
 			"When enabled tools will be saved " + "when they are closed");
@@ -247,16 +248,6 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 		DataBuffer.enableCompressedSerializationOutput(compressDataBuffers);
 
 		options.addOptionsChangeListener(this);
-	}
-
-	// a place to clear options that are specific to the FrontEndTool and should be reset between
-	// opening projects
-	private void clearFrontEndOptions() {
-		// TODO: just for the record, it seems odd to me that you would want to the FrontEndTool
-		// to have the 'auto save' setting be different for different projects--no sir, I don' like it
-		ToolOptions options = getOptions("Tool");
-		options.removeOptionsChangeListener(this);
-		options.removeOption(AUTOMATICALLY_SAVE_TOOLS);
 	}
 
 	@Override
@@ -295,7 +286,9 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 			return;
 		}
 
-		clearFrontEndOptions();
+		ToolOptions options = getOptions(ToolConstants.TOOL_OPTIONS);
+		options.removeOptionsChangeListener(this);
+
 		configureToolAction.setEnabled(true);
 		setProject(project);
 		AppInfo.setActiveProject(project);
@@ -664,7 +657,7 @@ public class FrontEndTool extends PluginTool implements OptionsChangeListener {
 		addHelpActions();
 
 		// our log file action
-		DockingAction action = new DockingAction("Show Log", "Tool") {
+		DockingAction action = new DockingAction("Show Log", ToolConstants.TOOL_OWNER) {
 			@Override
 			public void actionPerformed(ActionContext context) {
 				showGhidraUserLogFile();

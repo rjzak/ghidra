@@ -23,7 +23,6 @@ import java.util.function.Supplier;
 
 import docking.DockingWindowManager;
 import generic.concurrent.GThreadPool;
-import ghidra.generic.function.Callback;
 import ghidra.graph.*;
 import ghidra.graph.algo.ChkDominanceAlgorithm;
 import ghidra.graph.algo.ChkPostDominanceAlgorithm;
@@ -34,6 +33,7 @@ import ghidra.util.SystemUtilities;
 import ghidra.util.datastruct.CallbackAccumulator;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.*;
+import utility.function.Callback;
 
 /**
  * A class that calculates flow between vertices and then triggers that flow to be painted
@@ -722,10 +722,12 @@ public class VisualGraphPathHighlighter<V extends VisualVertex, E extends Visual
 			return t;
 		}
 		catch (InterruptedException e) {
-			Msg.trace(VisualGraphPathHighlighter.this, "Unable to complete the future", e);
+			Msg.trace(VisualGraphPathHighlighter.this,
+				"Unable to calculate graph path highlights - interrupted", e);
 		}
 		catch (ExecutionException e) {
-			Msg.debug(VisualGraphPathHighlighter.this, "Unable to complete the future", e);
+			Msg.debug(VisualGraphPathHighlighter.this, "Unable to calculate graph path highlights",
+				e);
 		}
 		return null;
 	}
@@ -823,6 +825,10 @@ public class VisualGraphPathHighlighter<V extends VisualVertex, E extends Visual
 	}
 
 	private void calculatePathsBetweenVerticesAsync(V v1, V v2) {
+
+		if (v1.equals(v2)) {
+			return;
+		}
 
 		CallbackAccumulator<List<V>> accumulator = new CallbackAccumulator<>(path -> {
 

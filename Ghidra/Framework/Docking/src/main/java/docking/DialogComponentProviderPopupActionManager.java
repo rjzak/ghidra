@@ -69,11 +69,11 @@ public class DialogComponentProviderPopupActionManager {
 			return;
 		}
 
-		DockingActionManager actionManager = dwm.getActionManager();
+		ActionToGuiMapper actionManager = dwm.getActionToGuiMapper();
 		MenuGroupMap menuGroupMap = actionManager.getMenuGroupMap();
 		MenuManager menuMgr =
 			new MenuManager("Popup", '\0', null, true, popupMenuHandler, menuGroupMap);
-		populatePopupMenuActions(actionContext, menuMgr);
+		populatePopupMenuActions(dwm, menuMgr, actionContext);
 		if (menuMgr.isEmpty()) {
 			return;
 		}
@@ -85,7 +85,8 @@ public class DialogComponentProviderPopupActionManager {
 		popupMenu.show(c, e.getX(), e.getY());
 	}
 
-	private void populatePopupMenuActions(ActionContext actionContext, MenuManager menuMgr) {
+	private void populatePopupMenuActions(DockingWindowManager dwm, MenuManager menuMgr,
+			ActionContext actionContext) {
 
 		Iterator<DockingActionIf> iter = popupActions.iterator();
 		while (iter.hasNext()) {
@@ -102,8 +103,20 @@ public class DialogComponentProviderPopupActionManager {
 		Object source = actionContext.getSourceObject();
 		if (source instanceof DockingActionProviderIf) {
 			DockingActionProviderIf actionProvider = (DockingActionProviderIf) source;
-			List<DockingActionIf> dockingActions = actionProvider.getDockingActions(actionContext);
+			List<DockingActionIf> dockingActions = actionProvider.getDockingActions();
 			for (DockingActionIf action : dockingActions) {
+				MenuData popupMenuData = action.getPopupMenuData();
+				if (popupMenuData != null && action.isValidContext(actionContext) &&
+					action.isAddToPopup(actionContext)) {
+					action.setEnabled(action.isEnabledForContext(actionContext));
+					menuMgr.addAction(action);
+				}
+			}
+		}
+
+		List<DockingActionIf> tempActions = dwm.getTemporaryPopupActions(actionContext);
+		if (tempActions != null) {
+			for (DockingActionIf action : tempActions) {
 				MenuData popupMenuData = action.getPopupMenuData();
 				if (popupMenuData != null && action.isValidContext(actionContext) &&
 					action.isAddToPopup(actionContext)) {

@@ -31,7 +31,8 @@ import javax.swing.table.*;
 
 import docking.*;
 import docking.action.*;
-import docking.util.KeyBindingUtils;
+import docking.actions.KeyBindingUtils;
+import docking.actions.PopupActionProvider;
 import docking.widgets.OptionDialog;
 import docking.widgets.dialogs.SettingsDialog;
 import docking.widgets.filechooser.GhidraFileChooser;
@@ -69,8 +70,7 @@ import resources.ResourceManager;
  *
  * @see GTableFilterPanel
  */
-// Suppress - we are using the deprecated reference to DefaultSortedTableModel to handle old code
-public class GTable extends JTable implements KeyStrokeConsumer, DockingActionProviderIf {
+public class GTable extends JTable implements KeyStrokeConsumer, PopupActionProvider {
 
 	private static final String LAST_EXPORT_FILE = "LAST_EXPORT_DIR";
 
@@ -510,35 +510,13 @@ public class GTable extends JTable implements KeyStrokeConsumer, DockingActionPr
 		return autoLookupKeyStrokeConsumer.isKeyConsumed(keyStroke);
 	}
 
-	/**
-	 * {@inheritDoc}
-	 */
 	@Override
-	public List<DockingActionIf> getDockingActions(ActionContext context) {
-		Object sourceObject = context.getSourceObject();
-		if (sourceObject != this) {
-			// we are only interested in providing actions when we are the source of the event
-			return Collections.emptyList();
-		}
+	public List<DockingActionIf> getPopupActions(DockingTool tool, ActionContext context) {
 
-		return getDefaultDockingActions();
-	}
-
-	/**
-	 * Returns the default actions of this table.  Normally, the Docking Windows systems uses
-	 * {@link #getDockingActions(ActionContext)} to get the correct actions to show.  However,
-	 * there are some cases where clients override what appears when you click on a table (such
-	 * as in {@link DialogComponentProvider}s.  For those clients that are creating their own
-	 * action building, they need a way to get the default actions, hence this method.
-	 *
-	 * @return the default actions
-	 */
-	public List<DockingActionIf> getDefaultDockingActions() {
 		// we want these top-level groups to all appear together, with no separator
-		DockingWindowManager dwm = DockingWindowManager.getInstance(this);
-		dwm.setMenuGroup(new String[] { "Copy" }, actionMenuGroup, "1");
-		dwm.setMenuGroup(new String[] { "Export" }, actionMenuGroup, "2");
-		dwm.setMenuGroup(new String[] { "Select All" }, actionMenuGroup, "3");
+		tool.setMenuGroup(new String[] { "Copy" }, actionMenuGroup, "1");
+		tool.setMenuGroup(new String[] { "Export" }, actionMenuGroup, "2");
+		tool.setMenuGroup(new String[] { "Select All" }, actionMenuGroup, "3");
 
 		List<DockingActionIf> list = new ArrayList<>();
 		list.add(copyAction);
@@ -551,8 +529,8 @@ public class GTable extends JTable implements KeyStrokeConsumer, DockingActionPr
 	}
 
 	private void init(boolean allowAutoEdit) {
-		docking.ToolTipManager.sharedInstance().unregisterComponent(this);
-		docking.ToolTipManager.sharedInstance().registerComponent(this);
+		ToolTipManager.sharedInstance().unregisterComponent(this);
+		ToolTipManager.sharedInstance().registerComponent(this);
 		setTableHeader(new GTableHeader(this));
 		if (!allowAutoEdit) {
 			putClientProperty("JTable.autoStartsEdit", Boolean.FALSE);
@@ -1179,7 +1157,8 @@ public class GTable extends JTable implements KeyStrokeConsumer, DockingActionPr
 
 		int subGroupIndex = 1; // order by insertion
 		String owner = getClass().getSimpleName();
-		copyAction = new DockingAction("Table Data Copy", owner, false) {
+		owner = "GTable";
+		copyAction = new DockingAction("Table Data Copy", owner, KeyBindingType.SHARED) {
 			@Override
 			public void actionPerformed(ActionContext context) {
 				copying = true;
@@ -1210,7 +1189,7 @@ public class GTable extends JTable implements KeyStrokeConsumer, DockingActionPr
 		//@formatter:on
 
 		copyCurrentColumnAction =
-			new DockingAction("Table Data Copy Current Column", owner, false) {
+			new DockingAction("Table Data Copy Current Column", owner, KeyBindingType.SHARED) {
 				@Override
 				public void actionPerformed(ActionContext context) {
 
@@ -1247,17 +1226,18 @@ public class GTable extends JTable implements KeyStrokeConsumer, DockingActionPr
 		copyCurrentColumnAction.setHelpLocation(new HelpLocation("Tables", "Copy_Current_Column"));
 		//@formatter:on
 
-		copyColumnsAction = new DockingAction("Table Data Copy by Columns", owner, false) {
-			@Override
-			public void actionPerformed(ActionContext context) {
-				int[] userColumns = promptUserForColumns();
-				if (userColumns == null) {
-					return; // cancelled
-				}
+		copyColumnsAction =
+			new DockingAction("Table Data Copy by Columns", owner, KeyBindingType.SHARED) {
+				@Override
+				public void actionPerformed(ActionContext context) {
+					int[] userColumns = promptUserForColumns();
+					if (userColumns == null) {
+						return; // cancelled
+					}
 
-				copyColumns(userColumns);
-			}
-		};
+					copyColumns(userColumns);
+				}
+			};
 		//@formatter:off
 		copyColumnsAction.setPopupMenuData(new MenuData(
 				new String[] { "Copy", "Copy Columns..." },
@@ -1270,7 +1250,7 @@ public class GTable extends JTable implements KeyStrokeConsumer, DockingActionPr
 		copyColumnsAction.setHelpLocation(new HelpLocation("Tables", "Copy_Columns"));
 		//@formatter:on
 
-		exportAction = new DockingAction("Table Data CSV Export", owner, false) {
+		exportAction = new DockingAction("Table Data CSV Export", owner, KeyBindingType.SHARED) {
 			@Override
 			public void actionPerformed(ActionContext context) {
 				File file = chooseExportFile();
@@ -1292,7 +1272,7 @@ public class GTable extends JTable implements KeyStrokeConsumer, DockingActionPr
 		//@formatter:on
 
 		exportColumnsAction =
-			new DockingAction("Table Data CSV Export (by Columns)", owner, false) {
+			new DockingAction("Table Data CSV Export (by Columns)", owner, KeyBindingType.SHARED) {
 				@Override
 				public void actionPerformed(ActionContext context) {
 					int[] userColumns = promptUserForColumns();
@@ -1324,7 +1304,7 @@ public class GTable extends JTable implements KeyStrokeConsumer, DockingActionPr
 		exportColumnsAction.setHelpLocation(new HelpLocation("Tables", "ExportCSV_Columns"));
 		//@formatter:on
 
-		selectAllAction = new DockingAction("Table Select All", owner, false) {
+		selectAllAction = new DockingAction("Table Select All", owner, KeyBindingType.SHARED) {
 			@Override
 			public void actionPerformed(ActionContext context) {
 				selectAll();
@@ -1498,5 +1478,4 @@ public class GTable extends JTable implements KeyStrokeConsumer, DockingActionPr
 			// ignored
 		}
 	}
-
 }

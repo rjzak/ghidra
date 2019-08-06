@@ -29,6 +29,7 @@ import org.jdom.Element;
 import docking.ComponentProvider;
 import docking.DialogComponentProvider;
 import docking.test.AbstractDockingTest;
+import docking.tool.ToolConstants;
 import generic.jar.ResourceFile;
 import generic.test.*;
 import ghidra.app.events.CloseProgramPluginEvent;
@@ -58,7 +59,6 @@ import ghidra.util.*;
 import ghidra.util.datastruct.WeakSet;
 import ghidra.util.exception.*;
 import ghidra.util.task.*;
-import resources.ResourceManager;
 import utilities.util.FileUtilities;
 
 public class TestEnv {
@@ -226,6 +226,10 @@ public class TestEnv {
 	}
 
 	public void closeTool(PluginTool toolToClose, boolean ignoreChanges) {
+		if (toolToClose == tool) {
+			tool = null;
+		}
+
 		extraTools.remove(toolToClose);
 		AbstractGenericTest.executeOnSwingWithoutBlocking(() -> {
 			if (ignoreChanges) {
@@ -496,13 +500,13 @@ public class TestEnv {
 	protected PluginTool launchDefaultToolByName(final String toolName) {
 		AtomicReference<PluginTool> ref = new AtomicReference<>();
 		AbstractGenericTest.runSwing(() -> {
-			// first try the tools in the classpath
-			File toolFile = ResourceManager.getResourceFile("defaultTools/" + toolName + ".tool");
-			if (!toolFile.exists()) {
+
+			ToolTemplate toolTemplate =
+				ToolUtils.readToolTemplate("defaultTools/" + toolName + ".tool");
+			if (toolTemplate == null) {
+				Msg.debug(this, "Unable to find tool: " + toolName);
 				return;
 			}
-
-			ToolTemplate toolTemplate = ToolUtils.readToolTemplate(toolFile);
 
 			boolean wasErrorGUIEnabled = AbstractDockingTest.isUseErrorGUI();
 			AbstractDockingTest.setErrorGUIEnabled(false); // disable the error GUI while launching the tool
@@ -599,7 +603,7 @@ public class TestEnv {
 	 */
 	public PluginTool launchAnotherDefaultTool() {
 		PluginTool newTool = createDefaultTool();
-		newTool.setToolName(newTool.getToolName() + toolID++);
+		AbstractGenericTest.runSwing(() -> newTool.setToolName(newTool.getToolName() + toolID++));
 		extraTools.add(newTool);
 		return newTool;
 
@@ -767,7 +771,7 @@ public class TestEnv {
 	 * Open a read-only test program from the test data directory.
 	 * This program must be released prior to disposing this test environment.
 	 * NOTE: Some tests rely on this method returning null when file does
-	 * not yet exist within the resource area (e.g., CUnit binaries for Processor Tests)
+	 * not yet exist within the resource area (e.g., test binaries for P-Code Tests)
 	 *
 	 * @param programName name of program database within the test data directory.
 	 * @return program or null if program file not found
@@ -884,7 +888,7 @@ public class TestEnv {
 	protected void setAutoSaveEnabled(final FrontEndTool frontEndToolInstance,
 			final boolean enabled) {
 		AbstractGenericTest.runSwing(() -> {
-			Options options = frontEndToolInstance.getOptions("Tool");
+			Options options = frontEndToolInstance.getOptions(ToolConstants.TOOL_OPTIONS);
 			options.setBoolean(FrontEndTool.AUTOMATICALLY_SAVE_TOOLS, enabled);
 		});
 	}
@@ -1074,8 +1078,7 @@ public class TestEnv {
 			// so that the tests may limp along if this is not a serious issue--throwing the
 			// exception my prevent other cleanup from taking place.
 			Msg.error(TestEnv.class, "Unable to delete project: " + projectName +
-				" in directory: " + AbstractGTest.getTestDirectoryPath(),
-				new RuntimeException());
+				" in directory: " + AbstractGTest.getTestDirectoryPath(), new RuntimeException());
 		}
 	}
 

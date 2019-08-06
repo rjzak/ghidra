@@ -56,7 +56,7 @@ public class PdbAnalyzer extends AbstractAnalyzer {
 	@Override
 	public boolean added(Program program, AddressSetView set, TaskMonitor monitor, MessageLog log) {
 
-		if (PdbParserNEW.isAlreadyLoaded(program)) {
+		if (PdbParser.isAlreadyLoaded(program)) {
 			return true;
 		}
 
@@ -80,7 +80,7 @@ public class PdbAnalyzer extends AbstractAnalyzer {
 
 		try {
 
-			pdb = PdbParserNEW.findPDB(program, symbolsRepositoryPath);
+			pdb = PdbParser.findPDB(program, symbolsRepositoryPath);
 
 			if (pdb == null) {
 
@@ -130,14 +130,14 @@ public class PdbAnalyzer extends AbstractAnalyzer {
 	boolean parsePdb(File pdb, Program program, AutoAnalysisManager mgr, TaskMonitor monitor,
 			MessageLog log) {
 		DataTypeManagerService dataTypeManagerService = mgr.getDataTypeManagerService();
-		PdbParserNEW parser = new PdbParserNEW(pdb, program, dataTypeManagerService, true);
+		PdbParser parser = new PdbParser(pdb, program, dataTypeManagerService, true, monitor);
 
 		String message;
 
 		try {
 			parser.parse();
 			parser.openDataTypeArchives();
-			parser.applyTo(monitor, log);
+			parser.applyTo(log);
 			return true;
 		}
 		catch (PdbException e) {
@@ -150,7 +150,11 @@ public class PdbAnalyzer extends AbstractAnalyzer {
 			return false;
 		}
 		catch (Exception e) {
-			Msg.showError(this, null, ERROR_TITLE, e.getMessage(), e);
+			String msg = e.getMessage();
+			if (msg == null) {
+				msg = e.toString();
+			}
+			Msg.showError(this, null, ERROR_TITLE, msg, e);
 			return false;
 		}
 
@@ -165,7 +169,7 @@ public class PdbAnalyzer extends AbstractAnalyzer {
 	public void registerOptions(Options options, Program program) {
 
 		String pdbStorageLocation =
-			Preferences.getProperty(PdbParserNEW.PDB_STORAGE_PROPERTY, null, true);
+			Preferences.getProperty(PdbParser.PDB_STORAGE_PROPERTY, null, true);
 		if (pdbStorageLocation != null) {
 			File pdbDirectory = new File(pdbStorageLocation);
 
@@ -186,7 +190,7 @@ public class PdbAnalyzer extends AbstractAnalyzer {
 			options.getString(SYMBOLPATH_OPTION_NAME, SYMBOLPATH_OPTION_DEFAULT_VALUE);
 		setSymbolsRepositoryPath(symbolPath);
 
-		Preferences.setProperty(PdbParserNEW.PDB_STORAGE_PROPERTY, symbolPath);
+		Preferences.setProperty(PdbParser.PDB_STORAGE_PROPERTY, symbolPath);
 		Preferences.store();
 	}
 

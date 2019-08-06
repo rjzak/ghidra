@@ -26,6 +26,8 @@ import java.util.ArrayList;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
+import javax.rmi.ssl.SslRMIClientSocketFactory;
+
 import org.apache.commons.lang3.RandomStringUtils;
 
 import generic.test.*;
@@ -40,7 +42,7 @@ import ghidra.framework.store.local.LocalFileSystem;
 import ghidra.framework.store.local.LocalFolderItem;
 import ghidra.net.*;
 import ghidra.program.model.listing.Program;
-import ghidra.server.UserAdmin;
+import ghidra.server.ServerAdmin;
 import ghidra.server.UserManager;
 import ghidra.test.ToyProgramBuilder;
 import ghidra.util.*;
@@ -550,7 +552,7 @@ public class ServerTestUtil {
 	}
 
 	private static boolean isServerRegistered(int port) throws IOException {
-		Registry reg = LocateRegistry.getRegistry(LOCALHOST, port);
+		Registry reg = LocateRegistry.getRegistry(LOCALHOST, port, new SslRMIClientSocketFactory());
 		try {
 			reg.lookup(GhidraServerHandle.BIND_NAME);
 			return true;
@@ -942,11 +944,12 @@ public class ServerTestUtil {
 	 * @throws Exception
 	 */
 	public static void addPKIUser(File serverRoot, String userName, String dn) throws Exception {
+		ServerAdmin serverAdmin = new ServerAdmin();
 		if (dn != null) {
-			UserAdmin.main(new String[] { serverRoot.getAbsolutePath(), "-dn", userName, dn });
+			serverAdmin.execute(new String[] { serverRoot.getAbsolutePath(), "-dn", userName, dn });
 		}
 		else {
-			UserAdmin.main(new String[] { serverRoot.getAbsolutePath(), "-add", userName });
+			serverAdmin.execute(new String[] { serverRoot.getAbsolutePath(), "-add", userName });
 		}
 	}
 
