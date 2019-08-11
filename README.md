@@ -1,3 +1,6 @@
+# Ghidra for Haiku OS
+This repository is a fork of the original Ghidra project. Here, master is kept updated with the upstream commits, and the branches contain my modifications to enable Ghidra to be built and executed on the Haiku operating system. More information about Haiku is available on their [website][haikuhome] and [forum][haikuforum]. Binaries are available on the [releases][ghidrareleases] tab.
+
 # Ghidra Software Reverse Engineering Framework
 
 Ghidra is a software reverse engineering (SRE) framework created and maintained by the [National Security Agency][nsa] Research Directorate. This framework includes a suite of full-featured, high-end software analysis tools that enable users to analyze compiled code on a variety of platforms including Windows, macOS, and Linux. Capabilities include disassembly, assembly, decompilation, graphing, and scripting, along with hundreds of other features. Ghidra supports a wide variety of processor instruction sets and executable formats and can be run in both user-interactive and automated modes. Users may also develop their own Ghidra plug-in components and/or scripts using Java or Python.
@@ -13,6 +16,9 @@ If you are a U.S. citizen interested in projects like this, to develop Ghidra, a
 other cybersecurity tools, for NSA to help protect our nation and its allies,
 consider applying for a [career with us][career].
 
+[haikuhome]: https://www.haiku-os.org/
+[haikuforum]: https://discuss.haiku-os.org/
+[ghidrareleases]: https://github.com/rjzak/ghidra/releases
 [nsa]: https://www.nsa.gov
 [contrib]: CONTRIBUTING.md
 [career]: https://www.intelligencecareers.gov/nsa
