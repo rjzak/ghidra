@@ -1,7 +1,7 @@
 # Ghidra for Haiku OS
 This repository is a fork of the original Ghidra project. Here, master is kept updated with the upstream commits, and the branches contain my modifications to enable Ghidra to be built and executed on the Haiku operating system. More information about Haiku is available on their [website][haikuhome] and [forum][haikuforum]. Binaries are available on the [releases][ghidrareleases] tab.
 
-If installing from the Haiku package, there isn't yet a launcher for the Applications Menu. But Ghidra can be launched by running `/system/ghidraRun`.
+If installing from the Haiku package, there isn't yet a launcher for the Applications Menu, however Ghidra can be launched by running `ghidraRun`.
 
 # Ghidra Software Reverse Engineering Framework
 
