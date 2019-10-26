@@ -15,6 +15,7 @@
  */
 package ghidra.app.plugin.core.datamgr;
 
+import java.awt.Component;
 import java.awt.Point;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -333,7 +334,8 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 
 			Object source = event.getSource();
 			if (source instanceof JTextField || source instanceof JTextPane) {
-				return new ActionContext(this, source, source);
+				Component component = (Component) source;
+				return new ActionContext(this, source, component);
 			}
 
 			Point point = event.getPoint();
@@ -452,8 +454,9 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 
 		previewScrollPane = new JScrollPane(previewPane);
 
-		DockingWindowManager.getHelpService().registerHelp(previewScrollPane,
-			new HelpLocation("DataTypeManagerPlugin", "Preview_Window"));
+		DockingWindowManager.getHelpService()
+				.registerHelp(previewScrollPane,
+					new HelpLocation("DataTypeManagerPlugin", "Preview_Window"));
 	}
 
 	private DataType locateDataType(HyperlinkEvent event) {
@@ -699,8 +702,8 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 	}
 
 	private ArchiveNode getProgramArchiveNode() {
-		GTreeNode rootNode = getGTree().getRootNode();
-		List<GTreeNode> children = rootNode.getAllChildren();
+		GTreeNode rootNode = getGTree().getModelRoot();
+		List<GTreeNode> children = rootNode.getChildren();
 		for (GTreeNode node : children) {
 			ArchiveNode archiveNode = (ArchiveNode) node;
 			Archive archive = archiveNode.getArchive();
@@ -712,8 +715,8 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 	}
 
 	private ArchiveNode getDataTypeArchiveNode(DataTypeArchive dataTypeArchive) {
-		GTreeNode rootNode = getGTree().getRootNode();
-		List<GTreeNode> children = rootNode.getAllChildren();
+		GTreeNode rootNode = getGTree().getModelRoot();
+		List<GTreeNode> children = rootNode.getChildren();
 		for (GTreeNode node : children) {
 			ArchiveNode archiveNode = (ArchiveNode) node;
 			Archive archive = archiveNode.getArchive();
@@ -752,7 +755,7 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 		}
 
 		Category category = dataTypeManager.getCategory(dataType.getCategoryPath());
-		ArchiveRootNode rootNode = (ArchiveRootNode) gTree.getRootNode();
+		ArchiveRootNode rootNode = (ArchiveRootNode) gTree.getViewRoot();
 		ArchiveNode archiveNode = rootNode.getNodeForManager(dataTypeManager);
 		if (archiveNode == null) {
 			plugin.setStatus("Cannot find archive '" + dataTypeManager.getName() + "'.  It may " +
@@ -842,8 +845,8 @@ public class DataTypesProvider extends ComponentProviderAdapter {
 	}
 
 	void programRenamed() {
-		ArchiveRootNode rootNode = (ArchiveRootNode) archiveGTree.getRootNode();
-		List<GTreeNode> allChildren = rootNode.getAllChildren();
+		ArchiveRootNode rootNode = (ArchiveRootNode) archiveGTree.getModelRoot();
+		List<GTreeNode> allChildren = rootNode.getChildren();
 		for (GTreeNode node : allChildren) {
 			ArchiveNode archiveNode = (ArchiveNode) node;
 			if (archiveNode.getArchive() instanceof ProgramArchive) {

@@ -269,17 +269,17 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		FieldHeader headerPanel = listingPanel.getFieldHeader();
 		if (headerPanel != null && source instanceof FieldHeaderComp) {
 			FieldHeaderLocation fhLoc = headerPanel.getFieldHeaderLocation(event.getPoint());
-			return new ActionContext(this, fhLoc);
+			return createContext(fhLoc);
 		}
 
 		if (otherPanel != null && otherPanel.isAncestorOf((Component) source)) {
 			Object obj = getContextForMarginPanels(otherPanel, event);
 			if (obj != null) {
-				return new ActionContext(this, obj);
+				return createContext(obj);
 			}
 			return new OtherPanelContext(this, program);
 		}
-		return new ActionContext(this, getContextForMarginPanels(listingPanel, event));
+		return createContext(getContextForMarginPanels(listingPanel, event));
 	}
 
 	private Object getContextForMarginPanels(ListingPanel lp, MouseEvent event) {
@@ -419,7 +419,10 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 
 	void updateTitle() {
 		String subTitle = program == null ? "" : ' ' + program.getDomainFile().getName();
-		String newTitle = isConnected() ? TITLE : "[" + TITLE + subTitle + "]";
+		String newTitle = TITLE + subTitle;
+		if (!isConnected()) {
+			newTitle = '[' + newTitle + ']';
+		}
 		setTitle(newTitle);
 	}
 
@@ -926,13 +929,6 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 		return fieldNavigator;
 	}
 
-	public void updateTitle(String programName) {
-		decorationPanel.updateTitle(programName);
-
-		String newTitle = isConnected() ? TITLE : "[" + TITLE + "]";
-		setTitle(newTitle + programName);
-	}
-
 	public void setView(AddressSetView view) {
 		// If we are using a MultiListingLayoutModel then adjust the view address set.
 		AddressSetView adjustedView = view;
@@ -955,11 +951,11 @@ public class CodeViewerProvider extends NavigatableComponentProviderAdapter
 	}
 
 	@Override
-	public List<DockingActionIf> getPopupActions(DockingTool tool, ActionContext context) {
+	public List<DockingActionIf> getPopupActions(DockingTool dt, ActionContext context) {
 		if (context.getComponentProvider() == this) {
 			return listingPanel.getHeaderActions(getName());
 		}
-		return new ArrayList<>();
+		return null;
 	}
 
 //==================================================================================================

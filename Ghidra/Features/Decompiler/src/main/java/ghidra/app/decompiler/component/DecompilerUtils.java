@@ -20,11 +20,12 @@ import java.util.*;
 import docking.widgets.fieldpanel.field.Field;
 import docking.widgets.fieldpanel.support.*;
 import ghidra.app.decompiler.*;
+import ghidra.app.plugin.core.decompile.DecompilerActionContext;
 import ghidra.program.model.address.*;
+import ghidra.program.model.data.DataType;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.pcode.*;
-import ghidra.util.Msg;
 
 public class DecompilerUtils {
 
@@ -217,7 +218,7 @@ public class DecompilerUtils {
 	 * Returns the function represented by the given token.  This will be either the 
 	 * decompiled function or a function referenced within the decompiled function.
 	 * 
-	 * @param program the progam
+	 * @param program the program
 	 * @param token the token
 	 * @return the function
 	 */
@@ -315,11 +316,6 @@ public class DecompilerUtils {
 		int nchild = parentNode.numChildren();
 		for (int i = 0; i < nchild; i++) {
 			ClangNode node = parentNode.Child(i);
-
-			if (node instanceof ClangFuncProto) {
-				Msg.debug(null, "");
-			}
-
 			if (node.numChildren() > 0) {
 				collectTokens(tokenList, node, addressSet);
 			}
@@ -342,7 +338,8 @@ public class DecompilerUtils {
 		return addressSet.intersects(minAddress, maxAddress);
 	}
 
-	public static Address getClosestAddress(ClangToken token) {
+	public static Address getClosestAddress(Program program, ClangToken token) {
+
 		Address address = token.getMinAddress();
 		if (address != null) {
 			return address;
@@ -670,4 +667,42 @@ public class DecompilerUtils {
 		return lines;
 	}
 
+	/**
+	 * Returns the data type for the given context if the context pertains to a data type
+	 * 
+	 * @param context the context
+	 * @return the data type or null
+	 */
+	public static DataType getDataType(DecompilerActionContext context) {
+
+		DecompilerPanel decompilerPanel = context.getDecompilerPanel();
+
+		// prefer the selection over the current location
+		ClangToken token = decompilerPanel.getSelectedToken();
+		if (token == null) {
+			token = decompilerPanel.getTokenAtCursor();
+		}
+
+		Varnode varnode = DecompilerUtils.getVarnodeRef(token);
+		if (varnode != null) {
+			HighVariable highVariable = varnode.getHigh();
+			if (highVariable != null) {
+				DataType dataType = highVariable.getDataType();
+				return dataType;
+
+			}
+		}
+
+		if (token instanceof ClangTypeToken) {
+			DataType dataType = ((ClangTypeToken) token).getDataType();
+			return dataType;
+		}
+
+		if (token instanceof ClangFieldToken) {
+			DataType dataType = ((ClangFieldToken) token).getDataType();
+			return dataType;
+		}
+
+		return null;
+	}
 }

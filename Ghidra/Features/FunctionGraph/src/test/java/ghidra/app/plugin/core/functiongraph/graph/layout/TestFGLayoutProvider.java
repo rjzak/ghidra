@@ -227,7 +227,8 @@ public class TestFGLayoutProvider extends FGLayoutProvider {
 					break;
 				default:
 					if (!(parent.v instanceof GroupedFunctionGraphVertex)) {
-						Msg.debug(this, "\n\n\tMore than 2 edges????: " + parent);
+						// this can happen if a test adds another edge to a test vertex
+						Msg.debug(this, "\n\n\tMore than 2 edges?: " + parent);
 					}
 
 			}
@@ -313,7 +314,7 @@ public class TestFGLayoutProvider extends FGLayoutProvider {
 				}
 
 				else if (startCol.index > endCol.index) { // flow return
-					e.setAlpha(.25);
+					e.setDefaultAlpha(.25);
 
 					Shape shape = transformer.apply(startVertex);
 					Rectangle bounds = shape.getBounds();
@@ -338,7 +339,7 @@ public class TestFGLayoutProvider extends FGLayoutProvider {
 
 				else {  // same column--nothing to route
 					// straight line, which is the default
-					e.setAlpha(.25);
+					e.setDefaultAlpha(.25);
 				}
 				newEdgeArticulations.put(e, articulations);
 			}

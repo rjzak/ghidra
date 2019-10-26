@@ -108,8 +108,6 @@ public class MemoryBlockUtils {
 		return null;
 	}
 
-
-
 	/**
 	 * Creates a new bit mapped memory block. (A bit mapped block is a block where each byte value
 	 * is either 1 or 0 and the value is taken from a bit in a byte at some other address in memory)
@@ -227,20 +225,35 @@ public class MemoryBlockUtils {
 				block = program.getMemory().createInitializedBlock(name, start, fileBytes, offset,
 					length, isOverlay);
 			}
-			catch (MemoryConflictException e) {
-				block = program.getMemory().createInitializedBlock(name, start, fileBytes, offset,
-					length, true);
+			catch (MemoryConflictException | DuplicateNameException e) {
+				block = createBlockNoDuplicateName(program, name, start, fileBytes, offset, length);
 				log.appendMsg("Conflict attempting to create memory block: " + name +
 					" at address " + start.toString() + " Created block in new overlay instead");
 			}
 		}
-		catch (LockException | DuplicateNameException | MemoryConflictException e) {
+		catch (LockException | MemoryConflictException e) {
 			throw new RuntimeException(e);
 		}
 
 		setBlockAttributes(block, comment, source, r, w, x);
 		adjustFragment(program, block.getStart(), name);
 		return block;
+	}
+
+	private static MemoryBlock createBlockNoDuplicateName(Program program, String blockName,
+			Address start, FileBytes fileBytes, long offset, long length)
+			throws LockException, MemoryConflictException, AddressOverflowException {
+		int count = 1;
+		String name = blockName;
+		while (true) {
+			try {
+				return program.getMemory().createInitializedBlock(name, start, fileBytes, offset,
+					length, true);
+			}
+			catch (DuplicateNameException e) {
+				name = blockName + "_" + count++;
+			}
+		}
 	}
 
 	/**
@@ -279,12 +292,12 @@ public class MemoryBlockUtils {
 		MemoryBlock block;
 		try {
 			try {
-				block = memory.createInitializedBlock(name, start, dataInput, dataLength,
-					monitor, isOverlay);
+				block = memory.createInitializedBlock(name, start, dataInput, dataLength, monitor,
+					isOverlay);
 			}
 			catch (MemoryConflictException e) {
-					block = memory.createInitializedBlock(name, start, dataInput, dataLength,
-					monitor, true);
+				block = memory.createInitializedBlock(name, start, dataInput, dataLength, monitor,
+					true);
 			}
 		}
 		catch (LockException | DuplicateNameException | MemoryConflictException e) {
@@ -325,11 +338,12 @@ public class MemoryBlockUtils {
 	 * @param program the program in which to create a new FileBytes object
 	 * @param provider the ByteProvider from which to get the bytes.
 	 * @return the newly created FileBytes object.
+	 * @param monitor the monitor for canceling this potentially long running operation.
 	 * @throws IOException if an IOException occurred.
 	 */
-	public static FileBytes createFileBytes(Program program, ByteProvider provider)
-			throws IOException {
-		return createFileBytes(program, provider, 0, provider.length());
+	public static FileBytes createFileBytes(Program program, ByteProvider provider,
+			TaskMonitor monitor) throws IOException, CancelledException {
+		return createFileBytes(program, provider, 0, provider.length(), monitor);
 	}
 
 	/**
@@ -338,14 +352,16 @@ public class MemoryBlockUtils {
 	 * @param provider the ByteProvider from which to get the bytes.
 	 * @param offset the offset into the ByteProvider from which to start loading bytes.
 	 * @param length the number of bytes to load
+	 * @param monitor the monitor for canceling this potentially long running operation.
 	 * @return the newly created FileBytes object.
 	 * @throws IOException if an IOException occurred.
+	 * @throws CancelledException if the user cancelled the operation
 	 */
 	public static FileBytes createFileBytes(Program program, ByteProvider provider, long offset,
-			long length) throws IOException {
+			long length, TaskMonitor monitor) throws IOException, CancelledException {
 		Memory memory = program.getMemory();
 		try (InputStream fis = provider.getInputStream(offset)) {
-			return memory.createFileBytes(provider.getName(), offset, length, fis);
+			return memory.createFileBytes(provider.getName(), offset, length, fis, monitor);
 		}
 	}
 

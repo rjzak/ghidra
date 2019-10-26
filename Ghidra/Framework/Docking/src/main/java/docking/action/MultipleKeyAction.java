@@ -119,7 +119,7 @@ public class MultipleKeyAction extends DockingKeyBindingAction {
 		// Build list of actions which are valid in current context
 		ComponentProvider localProvider = tool.getActiveComponentProvider();
 		ActionContext localContext = getLocalContext(localProvider);
-		localContext.setSource(event.getSource());
+		localContext.setSourceObject(event.getSource());
 
 		ActionContext globalContext = tool.getGlobalContext();
 		List<ExecutableKeyActionAdapter> list = getValidContextActions(localContext, globalContext);
@@ -169,11 +169,13 @@ public class MultipleKeyAction extends DockingKeyBindingAction {
 		List<ExecutableKeyActionAdapter> list = new ArrayList<>();
 		boolean hasLocalActionsForKeyBinding = false;
 
-		// search for local actions first...
+		// 
+		// 1) Prefer local actions for the active provider
+		// 
 		for (ActionData actionData : actions) {
-			if (actionData.isMyProvider(localContext.getComponentProvider())) {
+			if (actionData.isMyProvider(localContext)) {
 				hasLocalActionsForKeyBinding = true;
-				if (actionData.action.isEnabledForContext(localContext)) {
+				if (isValidAndEnabled(actionData, localContext)) {
 					list.add(new ExecutableKeyActionAdapter(actionData.action, localContext));
 				}
 			}
@@ -185,25 +187,57 @@ public class MultipleKeyAction extends DockingKeyBindingAction {
 			return list;
 		}
 
-		// ...no locals, see if we have any global actions
+		//
+		// 2) Check for actions local to the source component 
+		// 
+		for (ActionData actionData : actions) {
+			if (!(actionData.action instanceof ComponentBasedDockingAction)) {
+				continue;
+			}
+
+			ComponentBasedDockingAction componentAction =
+				(ComponentBasedDockingAction) actionData.action;
+			if (componentAction.isValidComponentContext(localContext)) {
+				hasLocalActionsForKeyBinding = true;
+				if (isValidAndEnabled(actionData, localContext)) {
+					list.add(new ExecutableKeyActionAdapter(actionData.action, localContext));
+				}
+			}
+		}
+
+		if (hasLocalActionsForKeyBinding) {
+			// We have locals, ignore the globals.  This prevents global actions from processing
+			// the given keybinding when a local action exits, regardless of enablement.
+			return list;
+		}
+
+		// 
+		// 3) Check for global actions
+		// 
 		for (ActionData actionData : actions) {
 			if (actionData.isGlobalAction()) {
 				// When looking for context matches, we prefer local context, even though this
 				// is a 'global' action.  This allows more specific context to be used when
 				// available
-				if (actionData.action.isValidContext(localContext)) {
-					if (actionData.action.isEnabledForContext(localContext)) {
-						list.add(new ExecutableKeyActionAdapter(actionData.action, localContext));
-					}
+				if (isValidAndEnabled(actionData, localContext)) {
+					list.add(new ExecutableKeyActionAdapter(actionData.action, localContext));
 				}
-				else if (actionData.action.isValidGlobalContext(globalContext)) {
-					if (actionData.action.isEnabledForContext(globalContext)) {
-						list.add(new ExecutableKeyActionAdapter(actionData.action, globalContext));
-					}
+				else if (isValidAndEnabledGlobally(actionData, globalContext)) {
+					list.add(new ExecutableKeyActionAdapter(actionData.action, globalContext));
 				}
 			}
 		}
 		return list;
+	}
+
+	private boolean isValidAndEnabled(ActionData actionData, ActionContext localContext) {
+		DockingActionIf a = actionData.action;
+		return a.isValidContext(localContext) && a.isEnabledForContext(localContext);
+	}
+
+	private boolean isValidAndEnabledGlobally(ActionData actionData, ActionContext globalContext) {
+		DockingActionIf a = actionData.action;
+		return a.isValidGlobalContext(globalContext) && a.isEnabledForContext(globalContext);
 	}
 
 	@Override
@@ -271,7 +305,8 @@ public class MultipleKeyAction extends DockingKeyBindingAction {
 			return provider == null;
 		}
 
-		boolean isMyProvider(ComponentProvider otherProvider) {
+		boolean isMyProvider(ActionContext localContext) {
+			ComponentProvider otherProvider = localContext.getComponentProvider();
 			return provider == otherProvider;
 		}
 

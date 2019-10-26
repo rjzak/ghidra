@@ -6,14 +6,14 @@ The following is a list of dependencies, in no particular order.
 This guide includes instructions for obtaining many of these at the relevant step(s).
 You may not need all of these, depending on which portions you are building or developing.
 
-* Java JDK 11 - Free long term support (LTS) versions of JDK 11 are provided by:
+* Java JDK 11 (64-bit) - Free long term support (LTS) versions of JDK 11 are provided by:
     - AdoptOpenJDK
       - https://adoptopenjdk.net/releases.html?variant=openjdk11&jvmVariant=hotspot
     - Amazon Corretto
       - https://docs.aws.amazon.com/corretto/latest/corretto-11-ug/downloads-list.html
 * Eclipse - It must support JDK 11. Eclipse 2018-12 or later should work. Other IDEs may work, but we have not tested them.
     - https://www.eclipse.org/downloads/
-* Gradle 5.0 or later - We use version 5.0, and tested with up to 5.5.1.
+* Gradle 5.0 or later - We use version 5.0, and tested with up to 5.6.1.
     - https://gradle.org/next-steps/?version=5.0&format=bin
 * A C/C++ compiler - We use GCC on Linux, Xcode (Clang) on macOS, and Visual Studio 2017 on Windows.
     - https://gcc.gnu.org/
@@ -177,7 +177,7 @@ Download `cdt-8.6.0.zip` from The Eclipse Foundation, and place it in:
 ```bash
 cd ~/Downloads   # Or wherever
 curl -OL 'http://www.eclipse.org/downloads/download.php?r=1&protocol=https&file=/tools/cdt/releases/8.6/cdt-8.6.0.zip'
-curl -o 'cdt-8.6.0.zip.sha512' -L --retry 3 'http://www.eclipse.org/downloads/sums.php?type=sha512&file=/tools/cdt/releases/8.6/cdt-8.6.0.zip'
+curl -o 'cdt-8.6.0.zip.sha512' -L --retry 3 'https://www.eclipse.org/downloads/sums.php?type=sha512&file=/tools/cdt/releases/8.6/cdt-8.6.0.zip'
 shasum -a 512 -c 'cdt-8.6.0.zip.sha512'
 mkdir -p ~/git/ghidra/GhidraBuild/EclipsePlugins/GhidraDev/GhidraDevPlugin/build/
 cp ~/Downloads/cdt-8.6.0.zip ~/git/ghidra/GhidraBuild/EclipsePlugins/GhidraDev/GhidraDevPlugin/build/
@@ -267,6 +267,12 @@ On Windows:
 
 ```bash
 gradle buildNatives_win64
+```
+
+On Haiku:
+
+```bash
+gradle buildNatives_haiku64
 ```
 
 This will build the decompiler, the demangler for GNU toolchains, the sleigh compiler, and (on Windows only) the PDB parser.

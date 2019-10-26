@@ -15,8 +15,7 @@
  */
 package ghidra.framework.plugintool;
 
-import static ghidra.framework.model.ToolTemplate.TOOL_INSTANCE_NAME_XML_NAME;
-import static ghidra.framework.model.ToolTemplate.TOOL_NAME_XML_NAME;
+import static ghidra.framework.model.ToolTemplate.*;
 
 import java.awt.*;
 import java.awt.event.KeyEvent;
@@ -42,6 +41,7 @@ import docking.help.Help;
 import docking.help.HelpService;
 import docking.tool.ToolConstants;
 import docking.tool.util.DockingToolConstants;
+import docking.util.image.ToolIconURL;
 import docking.widgets.OptionDialog;
 import ghidra.framework.OperatingSystem;
 import ghidra.framework.Platform;
@@ -56,7 +56,6 @@ import ghidra.framework.plugintool.dialog.ManagePluginsDialog;
 import ghidra.framework.plugintool.mgr.*;
 import ghidra.framework.plugintool.util.*;
 import ghidra.framework.project.ProjectDataService;
-import ghidra.framework.project.tool.ToolIconURL;
 import ghidra.util.*;
 import ghidra.util.task.Task;
 import ghidra.util.task.TaskLauncher;
@@ -102,7 +101,6 @@ public abstract class PluginTool extends AbstractDockingTool implements Tool, Se
 
 	protected ToolIconURL iconURL = new ToolIconURL("view_detailed.png");
 
-	private DockingAction exportToolAction;
 	private ToolServices toolServices;
 
 	private boolean isConfigurable = true;
@@ -441,6 +439,8 @@ public abstract class PluginTool extends AbstractDockingTool implements Tool, Se
 		winMgr.setVisible(false);
 		eventMgr.clearLastEvents();
 		pluginMgr.dispose();
+
+		toolActions.removeActions(ToolConstants.TOOL_OWNER);
 		toolActions.dispose();
 
 		if (project != null) {
@@ -972,21 +972,42 @@ public abstract class PluginTool extends AbstractDockingTool implements Tool, Se
 	}
 
 	protected void addExportToolAction() {
-		exportToolAction = new DockingAction("Export Tool", ToolConstants.TOOL_OWNER) {
-			@Override
-			public void actionPerformed(ActionContext context) {
-				dialogMgr.exportTool();
-			}
-		};
-		MenuData menuData =
-			new MenuData(new String[] { ToolConstants.MENU_FILE, "Export Tool..." }, null, "Tool");
-		menuData.setMenuSubGroup("3Tool");
-		exportToolAction.setMenuBarData(menuData);
 
-		exportToolAction.setEnabled(true);
+		String menuGroup = "Tool";
+		String exportPullright = "Export";
+		setMenuGroup(new String[] { ToolConstants.MENU_FILE, exportPullright }, menuGroup);
+
+		int subGroup = 1;
+		DockingAction exportToolAction =
+			new DockingAction("Export Tool", ToolConstants.TOOL_OWNER) {
+				@Override
+				public void actionPerformed(ActionContext context) {
+					dialogMgr.exportTool();
+				}
+			};
+		MenuData menuData = new MenuData(
+			new String[] { ToolConstants.MENU_FILE, exportPullright, "Export Tool..." });
+		menuData.setMenuSubGroup(Integer.toString(subGroup++));
+		exportToolAction.setMenuBarData(menuData);
 		exportToolAction.setHelpLocation(
-			new HelpLocation(ToolConstants.TOOL_HELP_TOPIC, "Export Tool"));
+			new HelpLocation(ToolConstants.TOOL_HELP_TOPIC, "Export_Tool"));
 		addAction(exportToolAction);
+
+		DockingAction exportDefautToolAction =
+			new DockingAction("Export Default Tool", ToolConstants.TOOL_OWNER) {
+				@Override
+				public void actionPerformed(ActionContext e) {
+					dialogMgr.exportDefaultTool();
+				}
+			};
+		menuData = new MenuData(
+			new String[] { ToolConstants.MENU_FILE, exportPullright, "Export Default Tool..." });
+		menuData.setMenuSubGroup(Integer.toString(subGroup++));
+		exportDefautToolAction.setMenuBarData(menuData);
+		exportDefautToolAction.setHelpLocation(
+			new HelpLocation(ToolConstants.TOOL_HELP_TOPIC, "Export_Default_Tool"));
+
+		addAction(exportDefautToolAction);
 	}
 
 	protected void addHelpActions() {

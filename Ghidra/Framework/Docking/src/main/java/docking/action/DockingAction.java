@@ -372,9 +372,8 @@ public abstract class DockingAction implements DockingActionIf {
 	/**
 	 * Cleans up any resources used by the action.
 	 */
+	@Override
 	public void dispose() {
-		// TODO this doesn't seem to be called by the framework.  Should't we call this when
-		//      an action is removed from the tool??
 		propertyListeners.clear();
 	}
 
@@ -396,6 +395,13 @@ public abstract class DockingAction implements DockingActionIf {
 			buffer.append('\n');
 			buffer.append("        MENU GROUP:        ").append(menuBarData.getMenuGroup());
 			buffer.append('\n');
+
+			String parentGroup = menuBarData.getParentMenuGroup();
+			if (parentGroup != null) {
+				buffer.append("        PARENT GROUP:         ").append(parentGroup);
+				buffer.append('\n');
+			}
+
 			Icon icon = menuBarData.getMenuIcon();
 			if (icon != null && icon instanceof ImageIconWrapper) {
 				ImageIconWrapper wrapper = (ImageIconWrapper) icon;
@@ -412,6 +418,12 @@ public abstract class DockingAction implements DockingActionIf {
 			buffer.append('\n');
 			buffer.append("        POPUP GROUP:      ").append(popupMenuData.getMenuGroup());
 			buffer.append('\n');
+
+			String parentGroup = popupMenuData.getParentMenuGroup();
+			if (parentGroup != null) {
+				buffer.append("        PARENT GROUP:         ").append(parentGroup);
+				buffer.append('\n');
+			}
 
 			String menuSubGroup = popupMenuData.getMenuSubGroup();
 			if (menuSubGroup != MenuData.NO_SUBGROUP) {

@@ -32,7 +32,8 @@ import docking.help.HelpService;
 import docking.widgets.MultiLineLabel;
 import docking.widgets.OptionDialog;
 import docking.widgets.label.GIconLabel;
-import docking.widgets.tree.*;
+import docking.widgets.tree.GTree;
+import docking.widgets.tree.GTreeNode;
 import docking.widgets.tree.internal.DefaultGTreeDataTransformer;
 import ghidra.framework.options.*;
 import ghidra.util.*;
@@ -231,7 +232,7 @@ public class OptionsPanel extends JPanel {
 	public void displayCategory(String category, String filterText) {
 		String escapedDelimiter = Pattern.quote(Options.DELIMITER_STRING);
 
-		GTreeRootNode root = gTree.getRootNode();
+		GTreeNode root = gTree.getModelRoot();
 		category = root.getName() + Options.DELIMITER_STRING + category;
 		String[] categories = category.split(escapedDelimiter);
 		gTree.setFilterText(filterText);
@@ -319,14 +320,15 @@ public class OptionsPanel extends JPanel {
 			return; // not sure this can happen
 		}
 
+		HelpService help = Help.getHelpService();
 		HelpLocation location = options.getOptionsHelpLocation();
 		if (location == null) {
 			// The tree node may or may not have help.  The leaf options should all have help.
-			return;
+			help.clearHelp(this);
 		}
-
-		HelpService help = Help.getHelpService();
-		help.registerHelp(this, location);
+		else {
+			help.registerHelp(this, location);
+		}
 	}
 
 	private OptionsEditor getOptionsEditor(OptionsTreeNode node) {

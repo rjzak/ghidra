@@ -48,7 +48,7 @@ import resources.ResourceManager;
 	packageName = CorePluginPackage.NAME,
 	category = PluginCategoryNames.GRAPH,
 	shortDescription = "Call Trees Plugin",
-	description = "This plugin shows incoming and outging calls for a give function.  " +
+	description = "This plugin shows incoming and outgoing calls for a given function.  " +
 			"More specifically, one tree of the plugin will show all callers of the " +
 			"function and the other tree of the plugin will show all calls made " +
 			"by the function"
@@ -70,6 +70,7 @@ public class CallTreePlugin extends ProgramPlugin {
 
 		createActions();
 		primaryProvider = new CallTreeProvider(this, true);
+		providers.add(primaryProvider);
 	}
 
 	@Override
@@ -108,8 +109,12 @@ public class CallTreePlugin extends ProgramPlugin {
 		}
 	}
 
-	private CallTreeProvider findProviderForLocation(ProgramLocation location) {
+	CallTreeProvider findTransientProviderForLocation(ProgramLocation location) {
 		for (CallTreeProvider provider : providers) {
+			if (!provider.isTransient()) {
+				continue;
+			}
+
 			if (provider.isShowingLocation(location)) {
 				return provider;
 			}
@@ -177,7 +182,7 @@ public class CallTreePlugin extends ProgramPlugin {
 			return; // no program; cannot show tool
 		}
 
-		CallTreeProvider provider = findProviderForLocation(location);
+		CallTreeProvider provider = findTransientProviderForLocation(location);
 		if (provider != null) {
 			tool.showComponentProvider(provider, true);
 			return;

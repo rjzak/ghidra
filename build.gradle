@@ -22,8 +22,16 @@ if (System.env.JAVA_HOME) {
 	project.ext.JAVA_HOME = System.env.JAVA_HOME;
 }
 else {
-	project.ext.JAVA_HOME = "${System.properties.'java.home'}/../"
+	project.ext.JAVA_HOME = "${System.properties.'java.home'}"
 }
+
+/***************************************************************************************
+ * Make sure Gradle wasn't launched with a 32-bit Java...it can cause confusing errors
+ ***************************************************************************************/
+if ("32".equals(System.getProperty("sun.arch.data.model"))) {
+	throw new GradleException("\n\n\t32-bit Java detected!  Please use 64-bit Java.\n\n");
+}
+
 /*********************************************************************************
  *  Define the location of bin repo
  *********************************************************************************/
@@ -53,6 +61,13 @@ if (file("flatRepo").isDirectory()) {
 		}
 	}
 }
+else {	
+	/*File f = file("ghidra.repos.config")
+	if (!f.exists()) {
+		throw new GradleException("\n\n\n\tUnable to find the local maven repo." +  
+			"  Ensure you have created the ${f.getName()} file.\n\n\n");
+	}*/
+}
 
 /****************************************************************************
  * Create a set containing all the platforms we need when building native
@@ -63,6 +78,11 @@ if (file("flatRepo").isDirectory()) {
  ****************************************************************************/
 
 project.ext.set("OS_NAMES", ["osx64", "win32", "win64", "linux64", "haiku64"])
+
+/****************************************************************************
+ * Establish Visual Studio configuration environment for Windows native builds
+ ****************************************************************************/
+apply from: "GPL/vsconfig.gradle"
 
 /*********************************************************************************
  * Imports

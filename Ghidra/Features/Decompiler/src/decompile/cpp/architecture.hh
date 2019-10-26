@@ -255,6 +255,7 @@ protected:
   void parseProtoEval(const Element *el);		///< Apply prototype evaluation configuration
   void parseDefaultProto(const Element *el);		///< Apply default prototype model configuration
   void parseGlobal(const Element *el);			///< Apply global space configuration
+  void addOtherSpace(void);                         ////add OTHER space and all of its overlays to the symboltab
   void parseReadOnly(const Element *el);		///< Apply read-only region configuration
   void parseVolatile(const Element *el);		///< Apply volatile region configuration
   void parseReturnAddress(const Element *el);		///< Apply return address configuration
@@ -283,7 +284,7 @@ public:
   /// \param sp is the segmented space
   /// \param sop is the segment operator
   SegmentedResolver(Architecture *g,AddrSpace *sp,SegmentOp *sop) { glb=g; spc=sp; segop=sop; }
-  virtual Address resolve(uintb val,int4 sz,const Address &point);
+  virtual Address resolve(uintb val,int4 sz,const Address &point,uintb &fullEncoding);
 };
 
 /// The Translate object keeps track of address ranges for which

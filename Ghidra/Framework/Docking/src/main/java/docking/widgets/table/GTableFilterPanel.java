@@ -203,9 +203,9 @@ public class GTableFilterPanel<ROW_OBJECT> extends JPanel {
 
 		transformer = new DefaultRowFilterTransformer<>(tableModel, table.getColumnModel());
 
-		buildPanel(filterLabel);
-
 		textFilterModel = installTableModel(tableModel);
+
+		buildPanel(filterLabel);
 
 		TableColumnModel columnModel = table.getColumnModel();
 		columnModel.addColumnModelListener(columnModelListener);
@@ -214,7 +214,7 @@ public class GTableFilterPanel<ROW_OBJECT> extends JPanel {
 		table.addPropertyChangeListener(badProgrammingPropertyChangeListener);
 
 		DockingWindowManager.registerComponentLoadedListener(this,
-			windowManager -> initialize(windowManager));
+			(windowManager, provider) -> initialize(windowManager));
 	}
 
 	private void initialize(DockingWindowManager windowManager) {
@@ -390,15 +390,11 @@ public class GTableFilterPanel<ROW_OBJECT> extends JPanel {
 	}
 
 	private boolean isTableColumnFilterableModel() {
-
 		return table.getModel() instanceof RowObjectFilterModel;
 	}
 
 	@SuppressWarnings("unchecked")
 	private JComponent buildColumnFilterStateButton() {
-		if (!isTableColumnFilterableModel()) {
-			return null;
-		}
 
 		RowObjectFilterModel<ROW_OBJECT> tableModel =
 			(RowObjectFilterModel<ROW_OBJECT>) table.getModel();

@@ -15,8 +15,7 @@
  */
 package docking.test;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 import java.awt.*;
 import java.awt.datatransfer.*;
@@ -1326,7 +1325,7 @@ public abstract class AbstractDockingTest extends AbstractGenericTest {
 			}
 
 			actionContext = newContext;
-			actionContext.setSource(provider.getComponent());
+			actionContext.setSourceObject(provider.getComponent());
 
 			return actionContext;
 		});
@@ -1349,7 +1348,7 @@ public abstract class AbstractDockingTest extends AbstractGenericTest {
 		ActionContext context = runSwing(() -> {
 			ActionContext actionContext = provider.getActionContext(null);
 			if (actionContext != null) {
-				actionContext.setSource(provider.getComponent());
+				actionContext.setSourceObject(provider.getComponent());
 			}
 			return actionContext;
 		});
@@ -2072,7 +2071,7 @@ public abstract class AbstractDockingTest extends AbstractGenericTest {
 	}
 
 	public static GTreeNode getNode(GTree tree, String... path) {
-		GTreeRootNode rootNode = tree.getRootNode();
+		GTreeNode rootNode = tree.getModelRoot();
 		String rootName = path[0];
 		if (!rootNode.getName().equals(rootName)) {
 			throw new RuntimeException(
@@ -2188,6 +2187,25 @@ public abstract class AbstractDockingTest extends AbstractGenericTest {
 		return ref.get();
 	}
 
+	/**
+	 * Creates a generic action context with no provider, with the given payload
+	 * @param payload the generic object to put in the context
+	 * @return the new context
+	 */
+	public ActionContext createContext(Object payload) {
+		return new ActionContext().setContextObject(payload);
+	}
+
+	/**
+	 * Creates a generic action context with the given provider, with the given payload
+	 * @param provider the provider
+	 * @param payload the generic object to put in the context
+	 * @return the new context
+	 */
+	public ActionContext createContext(ComponentProvider provider, Object payload) {
+		return new ActionContext(provider).setContextObject(payload);
+	}
+
 //==================================================================================================
 // Screen Capture
 //==================================================================================================
@@ -2202,7 +2220,7 @@ public abstract class AbstractDockingTest extends AbstractGenericTest {
 	 * @param name the file name suffix
 	 * @throws Exception if there is any issue capturing the component
 	 */
-	public void capture(JComponent c, String name) throws Exception {
+	public void capture(Component c, String name) throws Exception {
 
 		// old way of grabbing images--still need this if you want to capture a window's
 		// decorations

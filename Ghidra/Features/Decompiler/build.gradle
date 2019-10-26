@@ -79,10 +79,7 @@ def installPoint = "$rootDir/GhidraDocs/languages/html"
 task buildDecompilerDocumentationPdfs(type: Exec) {
 	// Check the OS before enabling task.
 	if (!(org.gradle.internal.os.OperatingSystem.current().isLinux() 
-		|| org.gradle.internal.os.OperatingSystem.current().isMacOsX()
-		//|| org.gradle.internal.os.OperatingSystem.current().isUnix()
-		)) {
-			println "The '$it.name' task only works on Linux or Mac Os X and is therefore disabled."
+		|| org.gradle.internal.os.OperatingSystem.current().isMacOsX())) {
 			it.enabled = false
 	}
 

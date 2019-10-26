@@ -44,8 +44,7 @@ import ghidra.program.model.address.*;
 import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.symbol.*;
-import ghidra.program.util.ProgramLocation;
-import ghidra.program.util.ProgramSelection;
+import ghidra.program.util.*;
 import ghidra.util.HelpLocation;
 import ghidra.util.Swing;
 import ghidra.util.bean.field.AnnotatedTextFieldElement;
@@ -104,7 +103,7 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 
 	private ViewerPosition pendingViewerPosition;
 
-	private SwingUpdateManager swingUpdateManager;
+	private SwingUpdateManager redecompilerUpdater;
 	private ServiceListener serviceListener = new ServiceListener() {
 
 		@Override
@@ -156,7 +155,7 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 		setHelpLocation(new HelpLocation(plugin.getName(), "Decompiler"));
 		addToTool();
 
-		swingUpdateManager = new SwingUpdateManager(500, 5000, () -> doRefresh());
+		redecompilerUpdater = new SwingUpdateManager(500, 5000, () -> doRefresh());
 
 		plugin.getTool().addServiceListener(serviceListener);
 	}
@@ -282,7 +281,14 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 		if (!isVisible()) {
 			return;
 		}
-		swingUpdateManager.update();
+
+		if (ev.containsEvent(ChangeManager.DOCR_MEMORY_BLOCK_ADDED) ||
+			ev.containsEvent(ChangeManager.DOCR_MEMORY_BLOCK_REMOVED)) {
+			controller.resetDecompiler();
+		}
+
+		redecompilerUpdater.update();
+
 	}
 
 	private void doRefresh() {
@@ -326,7 +332,7 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 	public void dispose() {
 		super.dispose();
 
-		swingUpdateManager.dispose();
+		redecompilerUpdater.dispose();
 
 		if (clipboardService != null) {
 			clipboardService.deRegisterClipboardContentProvider(clipboardProvider);
@@ -699,16 +705,16 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 		String functionGroup = "1 - Function Group";
 		int subGroupPosition = 0;
 
-		specifyCProtoAction = new SpecifyCPrototypeAction(owner, tool, controller);
+		specifyCProtoAction = new SpecifyCPrototypeAction(tool, controller);
 		setGroupInfo(specifyCProtoAction, functionGroup, subGroupPosition++);
 
-		overrideSigAction = new OverridePrototypeAction(owner, tool, controller);
+		overrideSigAction = new OverridePrototypeAction(tool, controller);
 		setGroupInfo(overrideSigAction, functionGroup, subGroupPosition++);
 
-		deleteSigAction = new DeletePrototypeOverrideAction(owner, tool, controller);
+		deleteSigAction = new DeletePrototypeOverrideAction(tool, controller);
 		setGroupInfo(deleteSigAction, functionGroup, subGroupPosition++);
 
-		renameFunctionAction = new RenameFunctionAction(owner, tool, controller);
+		renameFunctionAction = new RenameFunctionAction(tool, controller);
 		setGroupInfo(renameFunctionAction, functionGroup, subGroupPosition++);
 
 		//
@@ -717,32 +723,32 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 		String variableGroup = "2 - Variable Group";
 		subGroupPosition = 0; // reset for the next group
 
-		renameVarAction = new RenameVariableAction(owner, tool, controller);
+		renameVarAction = new RenameVariableAction(tool, controller);
 		setGroupInfo(renameVarAction, variableGroup, subGroupPosition++);
 
-		retypeVarAction = new RetypeVariableAction(owner, tool, controller);
+		retypeVarAction = new RetypeVariableAction(tool, controller);
 		setGroupInfo(retypeVarAction, variableGroup, subGroupPosition++);
 
 		decompilerCreateStructureAction =
 			new DecompilerStructureVariableAction(owner, tool, controller);
 		setGroupInfo(decompilerCreateStructureAction, variableGroup, subGroupPosition++);
 
-		editDataTypeAction = new EditDataTypeAction(owner, tool, controller);
+		editDataTypeAction = new EditDataTypeAction(tool, controller);
 		setGroupInfo(editDataTypeAction, variableGroup, subGroupPosition++);
 
-		defUseHighlightAction = new HighlightDefinedUseAction(owner, controller);
+		defUseHighlightAction = new HighlightDefinedUseAction(controller);
 		setGroupInfo(defUseHighlightAction, variableGroup, subGroupPosition++);
 
-		forwardSliceAction = new ForwardSliceAction(owner, controller);
+		forwardSliceAction = new ForwardSliceAction(controller);
 		setGroupInfo(forwardSliceAction, variableGroup, subGroupPosition++);
 
-		backwardSliceAction = new BackwardsSliceAction(owner, controller);
+		backwardSliceAction = new BackwardsSliceAction(controller);
 		setGroupInfo(backwardSliceAction, variableGroup, subGroupPosition++);
 
-		forwardSliceToOpsAction = new ForwardSliceToPCodeOpsAction(owner, controller);
+		forwardSliceToOpsAction = new ForwardSliceToPCodeOpsAction(controller);
 		setGroupInfo(forwardSliceToOpsAction, variableGroup, subGroupPosition++);
 
-		backwardSliceToOpsAction = new BackwardsSliceToPCodeOpsAction(owner, controller);
+		backwardSliceToOpsAction = new BackwardsSliceToPCodeOpsAction(controller);
 		setGroupInfo(backwardSliceToOpsAction, variableGroup, subGroupPosition++);
 
 		//
@@ -756,10 +762,10 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 		String commitGroup = "3 - Commit Group";
 		subGroupPosition = 0; // reset for the next group
 
-		lockProtoAction = new CommitParamsAction(owner, tool, controller);
+		lockProtoAction = new CommitParamsAction(tool, controller);
 		setGroupInfo(lockProtoAction, commitGroup, subGroupPosition++);
 
-		lockLocalAction = new CommitLocalsAction(owner, tool, controller);
+		lockLocalAction = new CommitLocalsAction(tool, controller);
 		setGroupInfo(lockLocalAction, commitGroup, subGroupPosition++);
 
 		//
@@ -773,14 +779,35 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 		//
 		// Search
 		//
+
 		String searchGroup = "comment2 - Search Group";
 		subGroupPosition = 0; // reset for the next group
 
-		findAction = new FindAction(tool, controller, owner);
+		findAction = new FindAction(tool, controller);
 		setGroupInfo(findAction, searchGroup, subGroupPosition++);
+
+		//
+		// References 
+		// 
+
+		// note: set the menu group so that the 'References' group is with the 'Find' action
+		String referencesParentGroup = searchGroup;
 
 		findReferencesAction = new FindReferencesToDataTypeAction(owner, tool, controller);
 		setGroupInfo(findReferencesAction, searchGroup, subGroupPosition++);
+		findReferencesAction.getPopupMenuData().setParentMenuGroup(referencesParentGroup);
+
+		FindReferencesToSymbolAction findReferencesToSymbolAction =
+			new FindReferencesToSymbolAction(tool);
+		setGroupInfo(findReferencesToSymbolAction, searchGroup, subGroupPosition++);
+		findReferencesToSymbolAction.getPopupMenuData().setParentMenuGroup(referencesParentGroup);
+		addLocalAction(findReferencesToSymbolAction);
+
+		FindReferencesToAddressAction findReferencesToAdressAction =
+			new FindReferencesToAddressAction(tool, owner);
+		setGroupInfo(findReferencesToAdressAction, searchGroup, subGroupPosition++);
+		findReferencesToAdressAction.getPopupMenuData().setParentMenuGroup(referencesParentGroup);
+		addLocalAction(findReferencesToAdressAction);
 
 		//
 		// Options
@@ -794,9 +821,9 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 		//
 		// These actions are not in the popup menu
 		//
-		debugFunctionAction = new DebugDecompilerAction(owner, controller);
-		convertAction = new ExportToCAction(owner, controller);
-		cloneDecompilerAction = new CloneDecompilerAction(owner, this, controller);
+		debugFunctionAction = new DebugDecompilerAction(controller);
+		convertAction = new ExportToCAction(controller);
+		cloneDecompilerAction = new CloneDecompilerAction(this, controller);
 
 		addLocalAction(refreshAction);
 		addLocalAction(selectAllAction);
@@ -832,7 +859,7 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 	private void setGroupInfo(DockingAction action, String group, int subGroupPosition) {
 		MenuData popupMenuData = action.getPopupMenuData();
 		popupMenuData.setMenuGroup(group);
-		popupMenuData.setMenuSubGroup(Integer.toString(subGroupPosition++));
+		popupMenuData.setMenuSubGroup(Integer.toString(subGroupPosition));
 	}
 
 	private void graphServiceRemoved() {
@@ -845,8 +872,7 @@ public class DecompilerProvider extends NavigatableComponentProviderAdapter
 
 	private void graphServiceAdded() {
 		if (graphASTControlFlowAction == null && tool.getService(GraphService.class) != null) {
-			graphASTControlFlowAction =
-				new GraphASTControlFlowAction(plugin.getName(), plugin, controller);
+			graphASTControlFlowAction = new GraphASTControlFlowAction(plugin, controller);
 			addLocalAction(graphASTControlFlowAction);
 		}
 	}

@@ -63,8 +63,13 @@ public class DockingWindowManager implements PropertyChangeListener, Placeholder
 	private static DockingActionIf actionUnderMouse;
 	private static Object objectUnderMouse;
 
-	public static final String TOOL_PREFERENCES_XML_NAME = "PREFERENCES";
+	/**
+	 * The owner name for docking windows actions.  
+	 * <p>Warning: Any action with this owner will get removed every time the 'Window' menu is
+	 * rebuilt, with the exception if reserved key bindings. 
+	 */
 	public static final String DOCKING_WINDOWS_OWNER = "DockingWindows";
+	public static final String TOOL_PREFERENCES_XML_NAME = "PREFERENCES";
 
 	/**
 	 * The helpService field should be set to the appropriate help service provider.
@@ -558,6 +563,25 @@ public class DockingWindowManager implements PropertyChangeListener, Placeholder
 			}
 		}
 		return list;
+	}
+
+	/**
+	 * Returns the component provider that is the conceptual parent of the given component.  More
+	 * precisely, this will return the component provider whose 
+	 * {@link ComponentProvider#getComponent() component} is the parent of the given component.
+	 * 
+	 * @param component the component for which to find a provider
+	 * @return the provider; null if the component is not the child of a provider
+	 */
+	private ComponentProvider getComponentProvider(Component component) {
+		Set<ComponentProvider> providers = placeholderManager.getActiveProviders();
+		for (ComponentProvider provider : providers) {
+			JComponent providerComponent = provider.getComponent();
+			if (SwingUtilities.isDescendingFrom(component, providerComponent)) {
+				return provider;
+			}
+		}
+		return null;
 	}
 
 	DockableComponent getDockableComponent(ComponentProvider provider) {
@@ -1756,12 +1780,14 @@ public class DockingWindowManager implements PropertyChangeListener, Placeholder
 		 		2) A component provider's code
 		 		3) A dialog provider's code
 		 		4) A background thread
+		 		5) The help window
 		 		
 		 	It seems like the parent should be the active window for 1-2.  
 		 	Case 3 should probably use the window of the dialog provider.
 		 	Case 4 should probably use the main tool frame, since the user may be 
 		 	moving between windows while the thread is working.  So, rather than using the 
 		 	active window, we can default to the tool's frame.
+		 	Case 5 should use the help window.
 		 	
 		 	We have not yet solidified how we should parent.  This documentation is meant to 
 		 	move us towards clarity as we find Use Cases that don't make sense.  (Once we 
@@ -1804,6 +1830,10 @@ public class DockingWindowManager implements PropertyChangeListener, Placeholder
 
 		Component c = parent;
 		while (c != null) {
+			// Note: using a Frame here means that we will not find and use a dialog that is a			
+			//       parent of 'c' if it itself is parented to a Frame.   The issue is that 			
+			//       Use Case 'C' above may not work correctly.  If we find that to be the case, 
+			//       then we can try changing 'Frame' to 'Window' here.
 			if (c instanceof Frame) {
 				return (Window) c;
 			}
@@ -2165,7 +2195,8 @@ public class DockingWindowManager implements PropertyChangeListener, Placeholder
 				component.removeHierarchyListener(this);
 				DockingWindowManager dwm = getInstance(component);
 				if (dwm != null) {
-					listener.componentLoaded(dwm);
+					ComponentProvider provider = dwm.getComponentProvider(component);
+					listener.componentLoaded(dwm, provider);
 					return;
 				}
 

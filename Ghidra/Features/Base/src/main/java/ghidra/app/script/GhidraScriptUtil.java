@@ -378,11 +378,11 @@ public class GhidraScriptUtil {
 			//    /some/path/Ghidra/Features/Module/ghidra_scripts
 			// 
 			// Desired path:
-			//    /some/path/Ghidra/Features/Module/bin
+			//    /some/path/Ghidra/Features/Module/bin/scripts
 
 			ResourceFile scriptDir = path.getPath();
 			ResourceFile moduleDir = scriptDir.getParentFile();
-			dirs.add(new ResourceFile(moduleDir, BIN_DIR_NAME));
+			dirs.add(new ResourceFile(moduleDir, BIN_DIR_NAME + File.separator + "scripts"));
 		}
 		return dirs;
 	}
@@ -593,7 +593,7 @@ public class GhidraScriptUtil {
 	 * @param name the name of the script
 	 * @return the name as a '.java' file path (with '/'s and not '.'s)
 	 */
-	private static String fixupName(String name) {
+	static String fixupName(String name) {
 		if (name.endsWith(".java")) {
 			name = name.substring(0, name.length() - 5);
 		}

@@ -59,6 +59,10 @@ public class MemoryMapDB implements Memory, ManagerDB, LiveMemoryListener {
 	private AddressSet allInitializedAddrSet = new AddressSet();
 	private MemoryBlock lastBlock;// the last accessed block
 	private LiveMemoryHandler liveMemory;
+	
+	// lazy hashmap of block names to blocks, must be reloaded if blocks are removed or added
+	private HashMap<String,MemoryBlock> nameBlockMap = new HashMap<String, MemoryBlock>();
+	private final static MemoryBlock NoBlock = new MemoryBlockStub();  // placeholder for no block, not given out
 
 	Lock lock;
 	private Set<MemoryBlock> potentialOverlappingBlocks;
@@ -86,7 +90,7 @@ public class MemoryMapDB implements Memory, ManagerDB, LiveMemoryListener {
 		this.lock = lock;
 		defaultEndian = isBigEndian ? BIG_ENDIAN : LITTLE_ENDIAN;
 		adapter = MemoryMapDBAdapter.getAdapter(handle, openMode, this, monitor);
-		fileBytesAdapter = FileBytesAdapter.getAdapter(handle, openMode, this, monitor);
+		fileBytesAdapter = FileBytesAdapter.getAdapter(handle, openMode, monitor);
 		initializeBlocks();
 		buildAddressSets();
 	}
@@ -182,6 +186,7 @@ public class MemoryMapDB implements Memory, ManagerDB, LiveMemoryListener {
 		lastBlock = null;
 		blocks = newBlocks;
 		addrMap.memoryMapChanged(this);
+		nameBlockMap = new HashMap<>();
 	}
 
 	public void setLanguage(Language newLanguage) {
@@ -302,11 +307,25 @@ public class MemoryMapDB implements Memory, ManagerDB, LiveMemoryListener {
 	 */
 	@Override
 	public synchronized MemoryBlock getBlock(String blockName) {
+		// find block that might have been cached from previous call
+		MemoryBlock memoryBlock = nameBlockMap.get(blockName);
+		if (memoryBlock != null) {
+			if (memoryBlock == NoBlock) {
+				// found placeholder, have searched and found nothing before
+				return null;
+			}
+			return memoryBlock;
+		}
+
 		for (MemoryBlock block : blocks) {
 			if (block.getName().equals(blockName)) {
+				nameBlockMap.put(blockName, block);
 				return block;
 			}
 		}
+
+		// store placeholder there is no memory block with that name
+		nameBlockMap.put(blockName, NoBlock);
 		return null;
 	}
 
@@ -374,6 +393,9 @@ public class MemoryMapDB implements Memory, ManagerDB, LiveMemoryListener {
 		if (program != null) {
 			program.setChanged(ChangeManager.DOCR_MEMORY_BLOCK_CHANGED, block, null);
 		}
+		
+		// name could have changed
+		nameBlockMap = new HashMap<>();
 	}
 
 	void fireBytesChanged(Address addr, int count) {
@@ -494,8 +516,10 @@ public class MemoryMapDB implements Memory, ManagerDB, LiveMemoryListener {
 				return newBlock;
 			}
 			catch (IOCancelledException e) {
-				// TODO: this could leave things in a bad state.  
-				// Canceling requires additional improvements (see GT-3064)
+				// this assumes the adapter has already cleaned up any partially created buffers.
+				if (overlay) {
+					checkRemoveAddressSpace(start.getAddressSpace());
+				}
 				throw new CancelledException();
 			}
 			catch (IOException e) {
@@ -1774,6 +1798,7 @@ public class MemoryMapDB implements Memory, ManagerDB, LiveMemoryListener {
 			finally {
 				program.setEventsEnabled(true);
 			}
+
 			fireBlockRemoved(startAddress);
 			if (startAddress.getAddressSpace().isOverlaySpace()) {
 				checkRemoveAddressSpace(startAddress.getAddressSpace());
@@ -2022,13 +2047,17 @@ public class MemoryMapDB implements Memory, ManagerDB, LiveMemoryListener {
 	}
 
 	@Override
-	public FileBytes createFileBytes(String filename, long offset, long size, InputStream is)
-			throws IOException {
+	public FileBytes createFileBytes(String filename, long offset, long size, InputStream is,
+			TaskMonitor monitor) throws IOException, CancelledException {
 		lock.acquire();
 		try {
-			// TODO: this should accept task monitor to permit cancellation although
-			// canceling requires additional improvements (see GT-3064)
+			if (monitor != null && is != null) {
+				is = new MonitoredInputStream(is, monitor);
+			}
 			return fileBytesAdapter.createFileBytes(filename, offset, size, is);
+		}
+		catch (IOCancelledException e) {
+			throw new CancelledException();
 		}
 		finally {
 			lock.release();
@@ -2042,7 +2071,7 @@ public class MemoryMapDB implements Memory, ManagerDB, LiveMemoryListener {
 	}
 
 	private void checkFileBytes(FileBytes fileBytes) {
-		if (fileBytes.getMemMap() != this) {
+		if (fileBytes.adapter != fileBytesAdapter) {
 			throw new IllegalArgumentException(
 				"Attempted to delete FileBytes that doesn't belong to this program");
 		}

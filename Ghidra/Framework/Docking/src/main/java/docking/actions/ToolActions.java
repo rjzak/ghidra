@@ -32,8 +32,7 @@ import docking.*;
 import docking.action.*;
 import docking.tool.util.DockingToolConstants;
 import ghidra.framework.options.*;
-import ghidra.util.ReservedKeyBindings;
-import ghidra.util.SystemUtilities;
+import ghidra.util.*;
 import ghidra.util.exception.AssertException;
 import util.CollectionUtils;
 
@@ -72,6 +71,7 @@ public class ToolActions implements DockingToolActions, PropertyChangeListener {
 		this.keyBindingOptions = tool.getOptions(DockingToolConstants.KEY_BINDINGS);
 
 		createReservedKeyBindings();
+		SharedActionRegistry.installSharedActions(tool, this);
 	}
 
 	private void createReservedKeyBindings() {
@@ -142,8 +142,9 @@ public class ToolActions implements DockingToolActions, PropertyChangeListener {
 		}
 
 		KeyStroke ks = action.getKeyBinding();
+		String description = "Keybinding for " + action.getFullName();
 		keyBindingOptions.registerOption(action.getFullName(), OptionType.KEYSTROKE_TYPE, ks, null,
-			null);
+			description);
 		KeyStroke newKs = keyBindingOptions.getKeyStroke(action.getFullName(), ks);
 		if (!Objects.equals(ks, newKs)) {
 			action.setUnvalidatedKeyBindingData(new KeyBindingData(newKs));
@@ -161,12 +162,7 @@ public class ToolActions implements DockingToolActions, PropertyChangeListener {
 
 			SharedStubKeyBindingAction newStub =
 				new SharedStubKeyBindingAction(name, keyBindingOptions);
-			newStub.addPropertyChangeListener(this);
-			keyBindingOptions.registerOption(newStub.getFullName(), OptionType.KEYSTROKE_TYPE,
-				defaultKeyStroke, null, null);
-
-			keyBindingsManager.addAction(provider, newStub);
-
+			registerStub(newStub, defaultKeyStroke);
 			return newStub;
 		});
 
@@ -178,6 +174,14 @@ public class ToolActions implements DockingToolActions, PropertyChangeListener {
 		}
 	}
 
+	private void registerStub(SharedStubKeyBindingAction stub, KeyStroke defaultKeyStroke) {
+		stub.addPropertyChangeListener(this);
+		String description = "Keybinding for Stub action: " + stub.getFullName();
+		keyBindingOptions.registerOption(stub.getFullName(), OptionType.KEYSTROKE_TYPE,
+			defaultKeyStroke, null, description);
+		keyBindingsManager.addAction(null, stub);
+	}
+
 	/**
 	 * Removes the given action from the tool
 	 * @param action the action to be removed.
@@ -187,6 +191,16 @@ public class ToolActions implements DockingToolActions, PropertyChangeListener {
 		action.removePropertyChangeListener(this);
 		removeAction(action);
 		actionGuiHelper.removeToolAction(action);
+		dispose(action);
+	}
+
+	private void dispose(DockingActionIf action) {
+		try {
+			action.dispose();
+		}
+		catch (Throwable t) {
+			Msg.error(this, "Exception disposing action '" + action.getFullName() + "'", t);
+		}
 	}
 
 	@Override
@@ -311,6 +325,7 @@ public class ToolActions implements DockingToolActions, PropertyChangeListener {
 		removeAction(action);
 		keyBindingsManager.removeAction(action);
 		actionGuiHelper.removeProviderAction(provider, action);
+		dispose(action);
 	}
 
 	@Override

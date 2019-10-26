@@ -34,6 +34,7 @@ import ghidra.program.model.mem.*;
 import ghidra.program.model.symbol.*;
 import ghidra.program.model.util.CodeUnitInsertionException;
 import ghidra.util.*;
+import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.InvalidInputException;
 import ghidra.util.task.TaskMonitor;
 import ghidra.util.task.TaskMonitorAdapter;
@@ -107,7 +108,8 @@ public class OmfLoader extends AbstractLibrarySupportLoader {
 
 	@Override
 	protected void load(ByteProvider provider, LoadSpec loadSpec, List<Option> options,
-			Program program, TaskMonitor monitor, MessageLog log) throws IOException {
+			Program program, TaskMonitor monitor, MessageLog log)
+			throws IOException, CancelledException {
 
 		OmfFileHeader header = null;
 		BinaryReader reader = OmfFileHeader.createReader(provider);
@@ -127,7 +129,7 @@ public class OmfLoader extends AbstractLibrarySupportLoader {
 		// We don't use the file bytes to create block because the bytes are manipulated before
 		// forming the block.  Creating the FileBytes anyway in case later we want access to all
 		// the original bytes.
-		MemoryBlockUtils.createFileBytes(program, provider);
+		MemoryBlockUtils.createFileBytes(program, provider, monitor);
 
 		int id = program.startTransaction("loading program from OMF");
 		boolean success = false;
@@ -322,7 +324,7 @@ public class OmfLoader extends AbstractLibrarySupportLoader {
 			}
 			else if (segment.hasNonZeroData()) {
 				block = MemoryBlockUtils.createInitializedBlock(program, false, segment.getName(),
-					segmentAddr, segment.getRawDataStream(reader), segmentSize,
+					segmentAddr, segment.getRawDataStream(reader, log), segmentSize,
 					"Address:0x" + Long.toHexString(segmentAddr.getOffset()) + " " + "Size:0x" +
 						Long.toHexString(segmentSize),
 					null/*source*/, segment.isReadable(), segment.isWritable(),

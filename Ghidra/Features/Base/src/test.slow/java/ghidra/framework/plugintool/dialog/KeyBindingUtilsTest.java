@@ -29,6 +29,7 @@ import javax.swing.tree.TreePath;
 
 import org.junit.*;
 
+import docking.ComponentProvider;
 import docking.action.DockingActionIf;
 import docking.actions.KeyBindingUtils;
 import docking.options.editor.OptionsDialog;
@@ -36,6 +37,7 @@ import docking.options.editor.OptionsPanel;
 import docking.tool.util.DockingToolConstants;
 import docking.widgets.filechooser.GhidraFileChooser;
 import docking.widgets.tree.GTree;
+import docking.widgets.tree.GTreeNode;
 import generic.io.NullWriter;
 import ghidra.app.plugin.core.codebrowser.CodeBrowserPlugin;
 import ghidra.app.plugin.core.data.DataPlugin;
@@ -86,6 +88,13 @@ public class KeyBindingUtilsTest extends AbstractGhidraHeadedIntegrationTest {
 //		Msg.debug(this, "Writing debug data to: " + file);
 //		debug = new FileWriter(file);
 
+		// debug to the local console
+//		debug = new PrintWriter(System.out);
+
+		setUpTool();
+	}
+
+	private void setUpTool() throws Exception {
 		debug("setUp()");
 
 		env = new TestEnv();
@@ -104,7 +113,19 @@ public class KeyBindingUtilsTest extends AbstractGhidraHeadedIntegrationTest {
 		tool.addPlugin(FunctionPlugin.class.getName());
 		tool.addPlugin(EquateTablePlugin.class.getName());
 
+		// Unusual Code: Some actions don't get created until the table is shown (like GTable
+		// actions). Show a provider that has a table so that the actions will get correctly
+		// loaded into the key bindings panel
+		showTableProvider();
+
 		debug("two");
+	}
+
+	private void showTableProvider() {
+		EquateTablePlugin eqp = env.getPlugin(EquateTablePlugin.class);
+		ComponentProvider provider = (ComponentProvider) getInstanceField("provider", eqp);
+		env.showTool();
+		tool.showComponentProvider(provider, true);
 	}
 
 	private void debug(String message) {
@@ -208,7 +229,7 @@ public class KeyBindingUtilsTest extends AbstractGhidraHeadedIntegrationTest {
 		ToolOptions originalOptions = importOptions(saveFile);
 
 		assertOptionsMatch(
-			"The Options objects do not contain different data after " + "changes have been made.",
+			"The Options objects do not contain different data after changes have been made.",
 			toolKeyBindingOptions, originalOptions);
 
 		debug("c");
@@ -220,7 +241,7 @@ public class KeyBindingUtilsTest extends AbstractGhidraHeadedIntegrationTest {
 
 		// verify the changes are different than the original values
 		assertOptionsDontMatch(
-			"The Options objects do not contain different data after " + "changes have been made.",
+			"The Options objects do not contain different data after changes have been made.",
 			toolKeyBindingOptions, originalOptions);
 
 		debug("e");
@@ -319,6 +340,7 @@ public class KeyBindingUtilsTest extends AbstractGhidraHeadedIntegrationTest {
 
 	private void setKeyBindingsUpDialog() throws Exception {
 		env.showTool();
+		showTableProvider();
 		setKeyBindingsUpDialog(tool);
 	}
 
@@ -346,7 +368,7 @@ public class KeyBindingUtilsTest extends AbstractGhidraHeadedIntegrationTest {
 
 		// this is an instance of OptionsNode
 		GTree tree = (GTree) getInstanceField("gTree", optionsPanel);
-		Object keyBindingsNode = getGTreeNode(tree.getRootNode(), "Key Bindings");
+		Object keyBindingsNode = getGTreeNode(tree.getModelRoot(), "Key Bindings");
 		selectNode(tree, keyBindingsNode);
 
 		debug("ee");
@@ -386,17 +408,18 @@ public class KeyBindingUtilsTest extends AbstractGhidraHeadedIntegrationTest {
 		SwingUtilities.invokeAndWait(() -> tree.setSelectionPath(path));
 	}
 
-	private Object getGTreeNode(Object parent, String nodeName) throws Exception {
-		List<?> children = (List<?>) getInstanceField("allChildrenList", parent);
-		if (children == null) {
+	private GTreeNode getGTreeNode(GTreeNode parent, String nodeName) throws Exception {
+		if (!parent.isLoaded()) {
 			return null;
 		}
-		for (Object rootChild : children) {
+
+		List<GTreeNode> children = parent.getChildren();
+		for (GTreeNode rootChild : children) {
 			String name = (String) invokeInstanceMethod("getName", rootChild);
 			if (nodeName.equals(name)) {
 				return rootChild;
 			}
-			Object foundNode = getGTreeNode(rootChild, nodeName);
+			GTreeNode foundNode = getGTreeNode(rootChild, nodeName);
 			if (foundNode != null) {
 				return foundNode;
 			}
@@ -531,13 +554,13 @@ public class KeyBindingUtilsTest extends AbstractGhidraHeadedIntegrationTest {
 	// compares the provided options with the mapping of property names to
 	// keystrokes (the map is obtained from the key bindings panel after an
 	// import is done).
-	private boolean compareOptionsWithKeyStrokeMap(Options options,
+	private boolean compareOptionsWithKeyStrokeMap(Options oldOptions,
 			Map<String, KeyStroke> panelKeyStrokeMap) {
-		List<String> propertyNames = options.getOptionNames();
+		List<String> propertyNames = oldOptions.getOptionNames();
 		for (String element : propertyNames) {
-			boolean match = panelKeyStrokeMap.containsKey(element);
 
-			KeyStroke optionsKs = options.getKeyStroke(element, null);
+			boolean match = panelKeyStrokeMap.containsKey(element);
+			KeyStroke optionsKs = oldOptions.getKeyStroke(element, null);
 			KeyStroke panelKs = panelKeyStrokeMap.get(element);
 
 			// if the value is null, then it would not have been placed into the options map 

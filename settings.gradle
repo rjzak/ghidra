@@ -31,7 +31,7 @@ includeProject('GhidraDocs', '.', true)
  * Include modules that are deactivated by default
  *******************************************************************************************/
 includeProjects('GhidraBuild/EclipsePlugins/GhidraDev') // requires Eclipse PDE
-includeProjects('GhidraBuild/EclipsePlugins/SleighEditor') // requires Eclipse DSL
+includeProjects('GhidraBuild/EclipsePlugins/GhidraSleighEditor') // requires Eclipse DSL
 
 /*******************************************************************************************
  * Apply additional Ghidra respositories
