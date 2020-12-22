@@ -18,6 +18,7 @@ package ghidra.app.util.bin.format.macho.commands;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import ghidra.app.util.bin.format.FactoryBundledWithBinaryReader;
 import ghidra.app.util.bin.format.macho.MachConstants;
@@ -74,10 +75,28 @@ public class SymbolTableCommand extends LoadCommand {
 
 		reader.setPointerIndex(header.getStartIndexInProvider() + symoff);
 
+		List<NList> nlistList = new ArrayList<>(nsyms);
+		long startIndex = header.getStartIndexInProvider();
+		boolean is32bit = header.is32bit();
+		reader.setPointerIndex(startIndex + symoff);
+
 		for (int i = 0; i < nsyms; ++i) {
-			NList symbol = NList.createNList(reader, header.is32bit(), stroff);
-			symbols.add(symbol);
+			nlistList.add(NList.createNList(reader, is32bit));
 		}
+		// sort the entries by the index in the string table, so don't jump around reading
+		List<NList> sortedList =
+			nlistList.stream().sorted((o1, o2) -> Integer.compare(o1.getStringTableIndex(),
+				o2.getStringTableIndex())).collect(Collectors.toList());
+
+		// initialize the sorted NList strings from string table
+		long stringTableOffset = stroff;
+		for (NList nList : sortedList) {
+			nList.initString(reader, stringTableOffset);
+		}
+
+		// the symbol table should be in the original order.
+		// The table is indexed by other tables in the MachO headers
+		symbols = nlistList;
 
 		reader.setPointerIndex(index);
 	}

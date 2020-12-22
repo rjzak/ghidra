@@ -25,14 +25,17 @@ import java.awt.event.MouseListener;
 import java.io.PrintWriter;
 import java.util.*;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.BooleanSupplier;
 
 import javax.swing.*;
 import javax.swing.Timer;
 import javax.swing.event.*;
 import javax.swing.tree.*;
 
+import org.apache.commons.lang3.StringUtils;
+
 import docking.DockingWindowManager;
+import docking.actions.KeyBindingUtils;
 import docking.widgets.JTreeMouseListenerDelegate;
 import docking.widgets.filter.FilterTextField;
 import docking.widgets.table.AutoscrollAdapter;
@@ -40,8 +43,8 @@ import docking.widgets.tree.internal.*;
 import docking.widgets.tree.support.*;
 import docking.widgets.tree.support.GTreeSelectionEvent.EventOrigin;
 import docking.widgets.tree.tasks.*;
-import ghidra.util.FilterTransformer;
-import ghidra.util.SystemUtilities;
+import generic.timer.ExpiringSwingTimer;
+import ghidra.util.*;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.*;
 import ghidra.util.worker.PriorityWorker;
@@ -56,13 +59,20 @@ public class GTree extends JPanel implements BusyListener {
 	private GTreeModel model;
 
 	/**
-	 * This is the root node that either is the actual current root node, or the node that will
-	 * be the real root node, once the Worker has loaded it.  Thus, it is possible that a call to
-	 * {@link GTreeModel#getRoot()} will return an {@link InProgressGTreeRootNode}.  By keeping
-	 * this variable around, we can give this node to clients, regardless of the root node
-	 * visible in the tree.
+	 * This is the root node of the tree's data model.  It may or may not be the root node
+	 * that is currently being displayed by the tree. If there is currently a 
+	 * filter applied, then then the displayed root node will be a clone whose children have been
+	 * trimmed to only those that match the filter.  By keeping this variable around, we can give
+	 * this node to clients, regardless of the root node visible in the tree.
 	 */
-	private GTreeNode realRootNode;
+	private volatile GTreeNode realModelRootNode;
+
+	/**
+	 * This is the root that is currently being displayed. This node will be either exactly the 
+	 * same instance as the realModelRootNode (if no filter has been applied) or it will be the
+	 * filtered clone of the realModelRootNode. 
+	 */
+	private volatile GTreeNode realViewRootNode;
 
 	/**
 	 * The rootParent is a node that is assigned as the parent to the realRootNode. It's primary purpose is
@@ -80,9 +90,7 @@ public class GTree extends JPanel implements BusyListener {
 	private JTreeMouseListenerDelegate mouseListenerDelegate;
 	private GTreeDragNDropHandler dragNDropHandler;
 	private boolean isFilteringEnabled = true;
-	private boolean hasFilterText = false;
 
-	private AtomicLong modificationID = new AtomicLong();
 	private ThreadLocal<TaskMonitor> threadLocalMonitor = new ThreadLocal<>();
 	private PriorityWorker worker;
 	private Timer showTimer;
@@ -92,7 +100,7 @@ public class GTree extends JPanel implements BusyListener {
 
 	private JPanel mainPanel;
 
-	private GTreeState restoreTreeState;
+	private GTreeState filterRestoreTreeState;
 	private GTreeFilterTask lastFilterTask;
 	private String uniquePreferenceKey;
 
@@ -108,7 +116,8 @@ public class GTree extends JPanel implements BusyListener {
 	 */
 	public GTree(GTreeNode root) {
 		uniquePreferenceKey = generateFilterPreferenceKey();
-		this.realRootNode = root;
+		this.realModelRootNode = root;
+		this.realViewRootNode = root;
 		monitor = new TaskMonitorComponent();
 		monitor.setShowProgressValue(false);// the tree's progress is fabricated--don't paint it
 		worker = new PriorityWorker("GTree Worker", monitor);
@@ -195,34 +204,7 @@ public class GTree extends JPanel implements BusyListener {
 	}
 
 	private void init() {
-		model.addTreeModelListener(new TreeModelListener() {
-			@Override
-			public void treeStructureChanged(TreeModelEvent e) {
-				modificationID.incrementAndGet();
-			}
-
-			@Override
-			public void treeNodesRemoved(TreeModelEvent e) {
-				modificationID.incrementAndGet();
-			}
-
-			@Override
-			public void treeNodesInserted(TreeModelEvent e) {
-				modificationID.incrementAndGet();
-			}
-
-			@Override
-			public void treeNodesChanged(TreeModelEvent e) {
-				// don't care
-			}
-		});
-		model.addTreeModelListener(new FilteredExpansionListener());
-
 		tree = new AutoScrollTree(model);
-		tree.setRowHeight(-1);// variable size rows
-		tree.setSelectionModel(new GTreeSelectionModel());
-		tree.setInvokesStopCellEditing(true);// clicking outside the cell editor will trigger a save, not a cancel
-		ToolTipManager.sharedInstance().registerComponent(tree);
 
 		setLayout(new BorderLayout());
 
@@ -240,7 +222,7 @@ public class GTree extends JPanel implements BusyListener {
 		addGTreeSelectionListener(e -> {
 			if (e.getEventOrigin() == GTreeSelectionEvent.EventOrigin.USER_GENERATED ||
 				e.getEventOrigin() == GTreeSelectionEvent.EventOrigin.API_GENERATED) {
-				restoreTreeState = getTreeState();
+				filterRestoreTreeState = getTreeState();
 			}
 		});
 
@@ -261,11 +243,17 @@ public class GTree extends JPanel implements BusyListener {
 	public void dispose() {
 		filterUpdateManager.dispose();
 		worker.dispose();
-		GTreeNode root = model.getModelRoot();
-		if (root != null) {
-			root.dispose();
+
+		if (realModelRootNode != null) {
+			realModelRootNode.dispose();
 		}
-		realRootNode.dispose();// just in case we were loading
+		// if there is a filter applied, clean up the filtered nodes. Note that filtered nodes
+		// are expected to be shallow clones of the model nodes, so we don't want to call full
+		// dispose on the filtered nodes because internal clean-up should happen when the
+		// model nodes are disposed. The disposeClones just breaks the child-parent ties.
+		if (realViewRootNode != null && realViewRootNode != realModelRootNode) {
+			realViewRootNode.disposeClones();
+		}
 		model.dispose();
 	}
 
@@ -286,7 +274,6 @@ public class GTree extends JPanel implements BusyListener {
 
 	protected void updateModelFilter() {
 		filter = filterProvider.getFilter();
-		modificationID.incrementAndGet();
 
 		if (lastFilterTask != null) {
 			// it is safe to repeatedly call cancel
@@ -300,13 +287,8 @@ public class GTree extends JPanel implements BusyListener {
 		}
 	}
 
-// TODO: doc on how to override to extend listener stuff
 	protected JTreeMouseListenerDelegate createMouseListenerDelegate() {
 		return new GTreeMouseListenerDelegate(tree, this);
-	}
-
-	public GTreeState getRestoreTreeState() {
-		return restoreTreeState;
 	}
 
 	/**
@@ -314,7 +296,8 @@ public class GTree extends JPanel implements BusyListener {
 	 * state.
 	 * <p>
 	 * <b>Note: </b>See the usage note at the header of this class concerning how tree state
-	 * is used relative to the <tt>equals()</tt> method.
+	 * is used relative to the <code>equals()</code> method.
+	 * @return the saved state
 	 */
 	public GTreeState getTreeState() {
 		return new GTreeState(this);
@@ -329,14 +312,34 @@ public class GTree extends JPanel implements BusyListener {
 	 * state object.
 	 * <p>
 	 * <b>Note: </b>See the usage note at the header of this class concerning how tree state
-	 * is used relative to the <tt>equals()</tt> method.
+	 * is used relative to the <code>equals()</code> method.
+	 * 
+	 * @param state the state to restore
 	 *
 	 * @see #getTreeState()
 	 * @see #getTreeState(GTreeNode)
-	 * @see #cloneTreeState()
 	 */
 	public void restoreTreeState(GTreeState state) {
 		runTask(new GTreeRestoreTreeStateTask(this, state));
+	}
+
+	/**
+	 * Signal to the tree that it should record its expanded and selected state when a 
+	 * new filter is applied
+	 */
+	void saveFilterRestoreState() {
+		// this may be called by sub-filter tasks and we wish to save only the first one
+		if (filterRestoreTreeState == null) {
+			filterRestoreTreeState = new GTreeState(this);
+		}
+	}
+
+	GTreeState getFilterRestoreState() {
+		return filterRestoreTreeState;
+	}
+
+	void clearFilterRestoreState() {
+		filterRestoreTreeState = null;
 	}
 
 	/**
@@ -345,10 +348,14 @@ public class GTree extends JPanel implements BusyListener {
 	 * that should be opened have been opened.  Thus any other nodes are closed and can be
 	 * disposed, if desired.
 	 *
-	 * @param taskMonitor
+	 * @param taskMonitor the TaskMonitor
 	 */
-	public void expandedStateRestored(TaskMonitor onitor) {
+	public void expandedStateRestored(TaskMonitor taskMonitor) {
 		// optional
+	}
+
+	public List<TreePath> getExpandedPaths() {
+		return getExpandedPaths(getViewRoot());
 	}
 
 	public List<TreePath> getExpandedPaths(GTreeNode node) {
@@ -582,7 +589,7 @@ public class GTree extends JPanel implements BusyListener {
 
 		GTreeNode node = (GTreeNode) path.getLastPathComponent();
 		if (path.getPathCount() == 1) {
-			if (root.getId() == node.getId()) {
+			if (root.equals(node)) {
 				return root;
 			}
 			return null; // invalid path--the root of the path is not equal to our root!
@@ -599,7 +606,7 @@ public class GTree extends JPanel implements BusyListener {
 		GTreeNode lastPathComponent = (GTreeNode) path.getLastPathComponent();
 		List<GTreeNode> children = parentNode.getChildren();
 		for (GTreeNode child : children) {
-			if (child.getId() == lastPathComponent.getId()) {
+			if (child.equals(lastPathComponent)) {
 				return child;
 			}
 		}
@@ -628,10 +635,6 @@ public class GTree extends JPanel implements BusyListener {
 		}
 		filterProvider.setDataTransformer(transformer);
 		updateModelFilter();
-	}
-
-	public String getFilterText() {
-		return filterProvider.getFilterText();
 	}
 
 	/**
@@ -718,66 +721,49 @@ public class GTree extends JPanel implements BusyListener {
 	}
 
 	/**
-	 * Sets the root node for the GTree.
-	 * <p>
-	 * Note: If this call is made from the Swing thread, then it will install a temporary
-	 * "In Progress" node and then return immediately.  However, when called from any other thread,
-	 * this method will block while any pending work is cancelled.  In this scenario, when this
-	 * method returns, the given root node will be the actual root node.
-	 *
-	 * @param rootNode The node to set.
+	 * Sets the root node for this tree. 
+	 * <P>
+	 * NOTE: if this method is not called from the Swing thread, then the root node will be set
+	 * later on the Swing thread.  That is, this method will return before the work has been done.
+	 * 
+	 * @param rootNode The node to set as the new root.
 	 */
 	public void setRootNode(GTreeNode rootNode) {
-		GTreeNode oldRoot = doSetRootNode(rootNode, true);
-		oldRoot.dispose();
-		if (filter != null) {
-			filterUpdateManager.update();
-		}
-	}
-
-	private GTreeNode doSetRootNode(GTreeNode rootNode, boolean waitForJobs) {
-		worker.clearAllJobs();
-		GTreeNode root = model.getModelRoot();
-
-		this.realRootNode = rootNode;
-		rootNode.setParent(rootParent);
-
-		//
-		// We need to use our standard 'worker pipeline' for mutations to the tree.  This means
-		// that requests from the Swing thread must go through the worker.  However,
-		// non-Swing-thread requests can just block while we wait for cancelled work to finish
-		// and setup the new root.  The assumption is that other threads (like test threads and
-		// client background threads) will want to block in order to get real-time data.  Further,
-		// since they are not in the Swing thread, blocking will not lock-up the GUI.
-		//
-		if (SwingUtilities.isEventDispatchThread()) {
-			model.setRootNode(new InProgressGTreeRootNode());
-			runTask(new SetRootNodeTask(this, rootNode, model));
-		}
-		else {
-			if (waitForJobs) {
-				worker.waitUntilNoJobsScheduled(Integer.MAX_VALUE);
+		Swing.runIfSwingOrRunLater(() -> {
+			worker.clearAllJobs();
+			rootNode.setParent(rootParent);
+			realModelRootNode = rootNode;
+			realViewRootNode = rootNode;
+			GTreeNode oldRoot;
+			oldRoot = swingSetModelRootNode(rootNode);
+			oldRoot.dispose();
+			if (filter != null) {
+				filterUpdateManager.update();
 			}
-			monitor.clearCanceled();
-			model.setRootNode(rootNode);
-		}
-		return root;
+		});
 	}
 
-	void setFilteredRootNode(GTreeNode filteredRootNode) {
-		GTreeNode currentRoot = (GTreeNode) model.getRoot();
-		model.setRootNode(filteredRootNode);
-		if (currentRoot != realRootNode) {
-			currentRoot.dispose();
+	void swingSetFilteredRootNode(GTreeNode filteredRootNode) {
+		filteredRootNode.setParent(rootParent);
+		realViewRootNode = filteredRootNode;
+		GTreeNode currentRoot = swingSetModelRootNode(filteredRootNode);
+		if (currentRoot != realModelRootNode) {
+			currentRoot.disposeClones();
 		}
 	}
 
-	void restoreNonFilteredRootNode() {
-		GTreeNode currentRoot = (GTreeNode) model.getRoot();
-		model.setRootNode(realRootNode);
-		if (currentRoot != realRootNode) {
-			currentRoot.dispose();
+	void swingRestoreNonFilteredRootNode() {
+		realViewRootNode = realModelRootNode;
+		GTreeNode currentRoot = swingSetModelRootNode(realModelRootNode);
+		if (currentRoot != realModelRootNode) {
+			currentRoot.disposeClones();
 		}
+	}
+
+	private GTreeNode swingSetModelRootNode(GTreeNode rootNode) {
+		GTreeNode oldNode = model.getModelRoot();
+		model.privateSwingSetRootNode(rootNode);
+		return oldNode;
 	}
 
 	/**
@@ -789,7 +775,7 @@ public class GTree extends JPanel implements BusyListener {
 	 * @return the root node as provided by the client.
 	 */
 	public GTreeNode getModelRoot() {
-		return realRootNode;
+		return realModelRootNode;
 	}
 
 	/**
@@ -800,12 +786,13 @@ public class GTree extends JPanel implements BusyListener {
 	 * @return the root node currently being display by the {@link JTree}
 	 */
 	public GTreeNode getViewRoot() {
-		return (GTreeNode) model.getRoot();
+		return realViewRootNode;
 	}
 
 	/**
 	 * This method is useful for debugging tree problems.  Don't know where else to put it.
-	 * @param name - Use this to indicate what tree event occurred ("node inserted" "node removed", etc.)
+	 * @param out the output writer
+	 * @param name use this to indicate what tree event occurred ("node inserted" "node removed", etc.)
 	 * @param e the TreeModelEvent;
 	 */
 	public static void printEvent(PrintWriter out, String name, TreeModelEvent e) {
@@ -944,23 +931,45 @@ public class GTree extends JPanel implements BusyListener {
 	}
 
 	public void addGTModelListener(TreeModelListener listener) {
-		tree.getModel().addTreeModelListener(listener);
+		model.addTreeModelListener(listener);
 	}
 
 	public void removeGTModelListener(TreeModelListener listener) {
-		tree.getModel().removeTreeModelListener(listener);
+		model.removeTreeModelListener(listener);
 	}
 
 	public void setEditable(boolean editable) {
 		tree.setEditable(editable);
 	}
 
-	public void startEditing(final GTreeNode parent, final String childName) {
+	/**
+	 * Requests that the node with the given name, in the given parent, be edited.  <b>This 
+	 * operation (as with many others on this tree) is asynchronous.</b>  This request will be
+	 * buffered as needed to wait for the given node to be added to the parent, up to a timeout
+	 * period.  
+	 * 
+	 * @param parent the parent node
+	 * @param childName the child node name
+	 */
+	public void startEditing(GTreeNode parent, final String childName) {
+
 		// we call this here, even though the JTree will do this for us, so that we will trigger
 		// a load call before this task is run, in case lazy nodes are involved in this tree,
 		// which must be loaded before we can edit
 		expandPath(parent);
-		runTask(new GTreeStartEditingTask(GTree.this, tree, parent, childName));
+
+		//
+		// The request to edit the node may be for a node that has not yet been added to this
+		// tree.  Further, some clients will buffer events, which means that the node the client 
+		// wishes to edit may not yet be in the parent node even if we run this request later on
+		// the Swing thread.  To deal with this, we use a construct that will run our request
+		// once the given node has been added to the parent.
+		//
+		BooleanSupplier isReady = () -> parent.getChild(childName) != null;
+		int expireMs = 3000;
+		ExpiringSwingTimer.runWhen(isReady, expireMs, () -> {
+			runTask(new GTreeStartEditingTask(GTree.this, tree, parent, childName));
+		});
 	}
 
 	@Override
@@ -988,7 +997,7 @@ public class GTree extends JPanel implements BusyListener {
 	}
 
 	/**
-	 * Passing a value of <tt>false</tt> signals to disable the {@link JTree}'s default behavior
+	 * Passing a value of <code>false</code> signals to disable the {@link JTree}'s default behavior
 	 * of showing handles for leaf nodes until they are opened.
 	 *
 	 * @param enable False to disable the default JTree behavior
@@ -1003,10 +1012,6 @@ public class GTree extends JPanel implements BusyListener {
 
 	public void setRootNodeAllowedToCollapse(boolean allowed) {
 		tree.setRootNodeAllowedToCollapse(allowed);
-	}
-
-	public long getModificationID() {
-		return modificationID.get();
 	}
 
 	private void showProgressPanel(boolean show) {
@@ -1094,8 +1099,16 @@ public class GTree extends JPanel implements BusyListener {
 		return filter;
 	}
 
+	public boolean isFiltered() {
+		return filter != null;
+	}
+
 	public boolean hasFilterText() {
-		return hasFilterText;
+		return !StringUtils.isBlank(filterProvider.getFilterText());
+	}
+
+	public String getFilterText() {
+		return filterProvider.getFilterText();
 	}
 
 	public void clearFilter() {
@@ -1143,10 +1156,6 @@ public class GTree extends JPanel implements BusyListener {
 		// for now only subclasses of GTree will set a node editable.
 	}
 
-	public boolean isFiltered() {
-		return filter != null;
-	}
-
 	@Override
 	public String toString() {
 		GTreeNode rootNode = getModelRoot();
@@ -1192,6 +1201,22 @@ public class GTree extends JPanel implements BusyListener {
 		public AutoScrollTree(TreeModel model) {
 			super(model);
 			scroller = new AutoscrollAdapter(this, 5);
+
+			setRowHeight(-1);// variable size rows
+			setSelectionModel(new GTreeSelectionModel());
+			setInvokesStopCellEditing(true);// clicking outside the cell editor will trigger a save, not a cancel
+
+			updateDefaultKeyBindings();
+
+			ToolTipManager.sharedInstance().registerComponent(this);
+		}
+
+		private void updateDefaultKeyBindings() {
+
+			// Remove the edit keybinding, as the GTree triggers editing via a task, since it
+			// is multi-threaded.  Doing this allows users to assign their own key bindings to 
+			// the edit task.
+			KeyBindingUtils.clearKeyBinding(this, "startEditing");
 		}
 
 		@Override
@@ -1310,74 +1335,6 @@ public class GTree extends JPanel implements BusyListener {
 			//       events as user vs internally generated.
 			GTreeSelectionModel gTreeSelectionModel = (GTreeSelectionModel) getSelectionModel();
 			gTreeSelectionModel.userRemovedSelectionPath(path);
-		}
-	}
-
-	/**
-	 * Listens for changes to nodes in the tree to refilter and expand nodes as they are changed.
-	 * We do this work here in the GTree, as opposed to doing it inside the GTreeNode, since the
-	 * GTree can buffer requests and trigger the work to happen in tasks.  If the work was done
-	 * in the nodes, then long running operations could block the Swing thread.
-	 */
-	private class FilteredExpansionListener implements TreeModelListener {
-
-		/**
-		 * We need this method to handle opening newly added tree nodes.  The GTreeNode will
-		 * properly handle filtering for us in this case, but it does not expand nodes, as this
-		 * is usually done in a separate task after the normal filtering process.
-		 */
-		@Override
-		public void treeNodesInserted(TreeModelEvent e) {
-			if (!hasFilterText) {
-				return;
-			}
-
-			Object[] children = e.getChildren();
-			for (Object child : children) {
-				GTreeNode node = (GTreeNode) child;
-				expandTree(node);
-			}
-		}
-
-		/**
-		 * We need this method to handle major tree changes that bypass the add and remove system
-		 * of the GTreeNode.
-		 */
-		@Override
-		public void treeStructureChanged(TreeModelEvent e) {
-			if (!hasFilterText) {
-				return;
-			}
-
-			Object lastPathComponent = e.getTreePath().getLastPathComponent();
-			GTreeNode node = (GTreeNode) lastPathComponent;
-			maybeTriggerUpdateForNode(node);
-		}
-
-		private void maybeTriggerUpdateForNode(GTreeNode node) {
-			if ((node instanceof InProgressGTreeNode) ||
-				(node instanceof InProgressGTreeRootNode)) {
-				return;
-			}
-
-			// root structure changes imply that we are being rebuilt/refiltered and those tasks
-			// are the result of an update, so there is nothing to do in that case
-			if (node == model.getModelRoot()) {
-				return;
-			}
-
-			updateModelFilter();
-		}
-
-		@Override
-		public void treeNodesChanged(TreeModelEvent e) {
-			// this is handled by the GTreeNode internally via adds and removes
-		}
-
-		@Override
-		public void treeNodesRemoved(TreeModelEvent e) {
-			// currently, the GTreeNode handles adds and removes on its own and updates the
-			// model accordingly
 		}
 	}
 

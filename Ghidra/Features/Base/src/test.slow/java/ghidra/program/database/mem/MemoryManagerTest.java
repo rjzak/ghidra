@@ -15,51 +15,20 @@
  */
 package ghidra.program.database.mem;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 
 import java.util.Iterator;
 
-import org.junit.After;
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Test;
+import org.junit.*;
 
 import ghidra.app.plugin.core.memory.UninitializedBlockCmd;
 import ghidra.program.database.ProgramBuilder;
 import ghidra.program.database.ProgramDB;
-import ghidra.program.model.address.Address;
-import ghidra.program.model.address.AddressOverflowException;
-import ghidra.program.model.address.AddressRange;
-import ghidra.program.model.address.AddressRangeImpl;
-import ghidra.program.model.address.AddressSet;
-import ghidra.program.model.address.AddressSetView;
-import ghidra.program.model.address.AddressSpace;
-import ghidra.program.model.data.ArrayDataType;
-import ghidra.program.model.data.ByteDataType;
-import ghidra.program.model.data.DataType;
-import ghidra.program.model.data.PointerDataType;
-import ghidra.program.model.listing.Data;
-import ghidra.program.model.listing.Function;
-import ghidra.program.model.listing.Listing;
-import ghidra.program.model.listing.ProgramFragment;
-import ghidra.program.model.listing.ProgramModule;
-import ghidra.program.model.mem.LiveMemoryHandler;
-import ghidra.program.model.mem.LiveMemoryListener;
-import ghidra.program.model.mem.Memory;
-import ghidra.program.model.mem.MemoryAccessException;
-import ghidra.program.model.mem.MemoryBlock;
-import ghidra.program.model.mem.MemoryBlockException;
-import ghidra.program.model.mem.MemoryBlockSourceInfo;
-import ghidra.program.model.mem.MemoryBlockStub;
-import ghidra.program.model.mem.MemoryBlockType;
-import ghidra.program.model.mem.MemoryConflictException;
-import ghidra.program.model.symbol.Reference;
-import ghidra.program.model.symbol.ReferenceManager;
-import ghidra.program.model.symbol.SourceType;
+import ghidra.program.model.address.*;
+import ghidra.program.model.data.*;
+import ghidra.program.model.listing.*;
+import ghidra.program.model.mem.*;
+import ghidra.program.model.symbol.*;
 import ghidra.test.AbstractGhidraHeadedIntegrationTest;
 import ghidra.test.ToyProgramBuilder;
 import ghidra.util.task.TaskMonitor;
@@ -255,7 +224,7 @@ public class MemoryManagerTest extends AbstractGhidraHeadedIntegrationTest {
 	public void testCreateBitBlock() throws Exception {
 		createBlock("Test", addr(0), 100);
 		createBlock("Test", addr(500), 100);
-		MemoryBlock bitBlock = mem.createBitMappedBlock("BitBlock", addr(600), addr(30), 20);
+		MemoryBlock bitBlock = mem.createBitMappedBlock("BitBlock", addr(600), addr(30), 20, false);
 		MemoryBlock block = mem.getBlock(addr(610));
 		assertNotNull(block);
 		assertEquals(bitBlock, block);
@@ -296,7 +265,6 @@ public class MemoryManagerTest extends AbstractGhidraHeadedIntegrationTest {
 
 		block2.setSourceName("Test");
 		assertEquals("Test", block2.getSourceName());
-
 	}
 
 	@Test
@@ -322,7 +290,7 @@ public class MemoryManagerTest extends AbstractGhidraHeadedIntegrationTest {
 		MemoryBlock block2 = createBlock("Test2", addr(500), 100);
 		MemoryBlock block3 = mem.createUninitializedBlock("Test3", addr(1500), 200, false);
 		MemoryBlock block4 = mem.createUninitializedBlock("Test4", addr(2500), 100, false);
-		mem.createBitMappedBlock("BitBlock", addr(3000), addr(550), 2000);
+		mem.createBitMappedBlock("BitBlock", addr(3000), addr(550), 2000, false);
 
 		MemoryBlock[] blocks = mem.getBlocks();
 		assertEquals(5, blocks.length);
@@ -399,12 +367,96 @@ public class MemoryManagerTest extends AbstractGhidraHeadedIntegrationTest {
 	}
 
 	@Test
+	public void testMemoryMapExecuteSet() throws Exception {
+		
+		AddressSetView executeSet = mem.getExecuteSet();
+		assertTrue(executeSet.isEmpty());
+		MemoryBlock block1 = createBlock("Test1", addr(100), 100);
+		executeSet = mem.getExecuteSet();
+		assertTrue(executeSet.isEmpty());
+		MemoryBlock block2 = createBlock("Test2", addr(300), 100);
+		executeSet = mem.getExecuteSet();
+		assertTrue(executeSet.isEmpty());
+
+		MemoryBlock block = mem.getBlock("Test1");
+		executeSet = mem.getExecuteSet();
+		assertTrue(executeSet.isEmpty());
+		
+		block.setExecute(false);
+		executeSet = mem.getExecuteSet();
+		assertTrue(executeSet.isEmpty());
+
+		block.setExecute(true);
+		executeSet = mem.getExecuteSet();
+		assertTrue(executeSet.isEmpty() != true);
+		Address start = block.getStart();
+		Address end = block.getEnd();
+		assertTrue(executeSet.contains(start,end));
+
+		// non-existent block
+		block = mem.getBlock("NoExist");
+		assertNull(block);
+		
+		program.endTransaction(transactionID, true);
+		transactionID = program.startTransaction("Test");	
+		
+		// now exists
+		mem.getBlock("Test1").setName("NoExist");
+		// Test1 no longer exists
+		block = mem.getBlock("NoExist");
+		executeSet = mem.getExecuteSet();
+		start = block.getStart();
+		end = block.getEnd();
+		// should be same block
+		assertTrue(executeSet.contains(start,end));
+		block.setExecute(false);
+		executeSet = mem.getExecuteSet();
+		assertTrue(executeSet.contains(start,end) == false);
+		
+		block2.setExecute(true);
+		Address start2 = block2.getStart();
+		Address end2 = block2.getEnd();
+		mem.removeBlock(block2, new TaskMonitorAdapter());
+		
+		program.endTransaction(transactionID, true);
+		
+		program.undo();
+		
+		transactionID = program.startTransaction("Test");
+
+		// should be execute set on block2, deleted, then undone
+		executeSet = mem.getExecuteSet();
+		assertTrue(executeSet.contains(start2,end2) == false);
+	
+		// undid set execute block should now be contained
+		block = mem.getBlock("Test1");
+		start = block.getStart();
+		end = block.getEnd();
+		executeSet = mem.getExecuteSet();
+		assertTrue(executeSet.contains(start,end));
+		
+		mem.split(block, addr(150));
+		block = mem.getBlock("Test1");
+		executeSet = mem.getExecuteSet();
+		assertTrue(executeSet.isEmpty() != true);
+		assertTrue(executeSet.contains(block.getStart(), block.getEnd()));
+		
+		// remove block that was split, should still be executable memory
+		start = block.getStart();
+		end = block.getEnd();
+		mem.removeBlock(block, new TaskMonitorAdapter());
+		executeSet = mem.getExecuteSet();
+		assertTrue(executeSet.isEmpty() != true);
+		assertTrue(executeSet.contains(start, end) == false);
+	}
+	
+	@Test
 	public void testSave() throws Exception {
 		MemoryBlock block1 = createBlock("Test1", addr(0), 100);
 		MemoryBlock block2 = createBlock("Test2", addr(500), 100);
 		MemoryBlock block3 = mem.createUninitializedBlock("Test3", addr(1500), 200, false);
 		mem.createUninitializedBlock("Test4", addr(2500), 100, false);
-		MemoryBlock block5 = mem.createBitMappedBlock("BitBlock", addr(3000), addr(550), 20);
+		MemoryBlock block5 = mem.createBitMappedBlock("BitBlock", addr(3000), addr(550), 20, false);
 		block1.setComment("Hello!");
 		block2.setName("NewTest2");
 		block3.setWrite(false);
@@ -587,7 +639,7 @@ public class MemoryManagerTest extends AbstractGhidraHeadedIntegrationTest {
 	public void testMoveBitBlock() throws Exception {
 		createBlock("Test", addr(0), 100);
 
-		MemoryBlock bitBlock = mem.createBitMappedBlock("BitBlock", addr(200), addr(50), 20);
+		MemoryBlock bitBlock = mem.createBitMappedBlock("BitBlock", addr(200), addr(50), 20, false);
 		assertEquals(0, bitBlock.getByte(addr(200)));
 		bitBlock.putByte(addr(200), (byte) 5);
 		assertEquals(1, bitBlock.getByte(addr(200)));
@@ -951,13 +1003,15 @@ public class MemoryManagerTest extends AbstractGhidraHeadedIntegrationTest {
 	public void testCreateOverlayBlock() throws Exception {
 		MemoryBlock block = mem.createInitializedBlock(".overlay", addr(0), 0x1000, (byte) 0xa,
 			TaskMonitor.DUMMY, true);
-		assertEquals(MemoryBlockType.OVERLAY, block.getType());
+		assertEquals(MemoryBlockType.DEFAULT, block.getType());
+		assertTrue(block.isOverlay());
 	}
 
 	@Test
 	public void testCreateBitMappedBlock() throws Exception {
 		mem.createInitializedBlock("mem", addr(0), 0x1000, (byte) 0xa, TaskMonitor.DUMMY, false);
-		MemoryBlock bitBlock = mem.createBitMappedBlock("bit", addr(0x2000), addr(0xf00), 0x1000);
+		MemoryBlock bitBlock =
+			mem.createBitMappedBlock("bit", addr(0x2000), addr(0xf00), 0x1000, false);
 
 		assertEquals(MemoryBlockType.BIT_MAPPED, bitBlock.getType());
 
@@ -973,7 +1027,8 @@ public class MemoryManagerTest extends AbstractGhidraHeadedIntegrationTest {
 	@Test
 	public void testCreateByteMappedBlock() throws Exception {
 		mem.createInitializedBlock("mem", addr(0), 0x1000, (byte) 0xa, TaskMonitor.DUMMY, false);
-		MemoryBlock byteBlock = mem.createByteMappedBlock("byte", addr(0x2000), addr(0xf00), 0x200);
+		MemoryBlock byteBlock =
+			mem.createByteMappedBlock("byte", addr(0x2000), addr(0xf00), 0x200, false);
 
 		assertEquals(MemoryBlockType.BYTE_MAPPED, byteBlock.getType());
 
@@ -983,14 +1038,14 @@ public class MemoryManagerTest extends AbstractGhidraHeadedIntegrationTest {
 		expectedInitializedSet.add(addr(0), addr(0xfff));
 		expectedInitializedSet.add(addr(0x2000), addr(0x20ff));
 		assertEquals(expectedInitializedSet, mem.getAllInitializedAddressSet());
-
 	}
 
 	@Test
 	public void testCreateRemoveCreateOverlayBlock() throws Exception {
 		MemoryBlock block = mem.createInitializedBlock(".overlay", addr(0), 0x1000, (byte) 0xa,
 			TaskMonitor.DUMMY, true);
-		assertEquals(MemoryBlockType.OVERLAY, block.getType());
+		assertEquals(MemoryBlockType.DEFAULT, block.getType());
+		assertTrue(block.isOverlay());
 		mem.removeBlock(block, TaskMonitor.DUMMY);
 		block =
 			mem.createInitializedBlock("ov2", addr(0), 0x2000, (byte) 0xa, TaskMonitor.DUMMY, true);

@@ -22,7 +22,9 @@ import java.util.List;
  * Also, children of this node can be unloaded by calling {@link #unloadChildren()}.  This
  * can be used by nodes in large trees to save memory by unloading children that are no longer
  * in the current tree view (collapsed).  Of course, that decision would need to be balanced
- * against the extra time to reload the nodes in the event that a filter is applied.
+ * against the extra time to reload the nodes in the event that a filter is applied. Also, if
+ * some external event occurs that changes the set of children for a GTreeLazyNode, you can call
+ * {@link #unloadChildren()} to clear any previously loaded children.
  */
 public abstract class GTreeLazyNode extends GTreeNode {
 
@@ -39,7 +41,7 @@ public abstract class GTreeLazyNode extends GTreeNode {
 	 */
 	public void unloadChildren() {
 		if (isLoaded()) {
-			doSetChildren(null);
+			setChildren(null);
 		}
 	}
 
@@ -66,9 +68,7 @@ public abstract class GTreeLazyNode extends GTreeNode {
 
 	@Override
 	public void removeAll() {
-		if (isLoaded()) {
-			unloadChildren();
-		}
+		unloadChildren();
 	}
 
 	@Override

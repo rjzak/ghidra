@@ -42,7 +42,6 @@ public class GFilterTable<ROW_OBJECT> extends JPanel {
 
 	public void dispose() {
 		filterPanel.dispose();
-		table.dispose();
 	}
 
 	private void buildTable() {
@@ -186,4 +185,7 @@ public class GFilterTable<ROW_OBJECT> extends JPanel {
 		filterPanel.requestFocus();
 	}
 
+	public void setFiterText(String text) {
+		filterPanel.setFilterText(text);
+	}
 }

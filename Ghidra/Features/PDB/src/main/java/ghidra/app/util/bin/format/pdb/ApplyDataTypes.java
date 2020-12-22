@@ -24,7 +24,6 @@ import ghidra.app.util.bin.format.pdb.PdbParser.PdbXmlMember;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.graph.*;
 import ghidra.graph.algo.GraphNavigator;
-import ghidra.graph.jung.JungDirectedGraph;
 import ghidra.program.model.data.Composite;
 import ghidra.program.model.data.DataType;
 import ghidra.program.model.symbol.SymbolUtilities;
@@ -64,11 +63,11 @@ public class ApplyDataTypes {
 		compositeQueue.clear();
 	}
 
-	private List<CompositeDefinition> getCompositeDefinitionsInpostDependencyOrder(
+	private List<CompositeDefinition> getCompositeDefinitionsInPostDependencyOrder(
 			TaskMonitor monitor) {
 
-		JungDirectedGraph<CompositeDefinition, GEdge<CompositeDefinition>> graph =
-			new JungDirectedGraph<>();
+		GDirectedGraph<CompositeDefinition, GEdge<CompositeDefinition>> graph =
+			GraphFactory.createDirectedGraph();
 		for (CompositeDefinition compositeDefinition : compositeQueue.values()) {
 			graph.addVertex(compositeDefinition);
 			for (PdbMember m : compositeDefinition.memberList) {
@@ -102,7 +101,7 @@ public class ApplyDataTypes {
 		monitor.setMessage("Order PDB datatypes... ");
 
 		List<CompositeDefinition> verticesInPostOrder =
-			getCompositeDefinitionsInpostDependencyOrder(monitor);
+			getCompositeDefinitionsInPostDependencyOrder(monitor);
 
 		monitor.setMessage("Building PDB datatypes... ");
 
@@ -116,7 +115,7 @@ public class ApplyDataTypes {
 				!cachedDataType.getCategoryPath().equals(
 					pdbParser.getCategory(symbolPath.getParent(), true)) ||
 				!pdbParser.isCorrectKind(cachedDataType, compositeDefinition.kind)) {
-				log.appendMsg("Error: Conflicting data type name: " + compositeDefinition.name);
+				log.appendMsg("PDB", "Conflicting data type name: " + compositeDefinition.name);
 				continue;
 			}
 			Composite composite = (Composite) cachedDataType;
@@ -169,7 +168,7 @@ public class ApplyDataTypes {
 				compositeQueue.put(compositeDefinition.name, compositeDefinition);
 
 				if (pdbParser.getCachedDataType(compositeDefinition.name) != null) {
-					log.appendMsg("Error: Data type name collision - unable to define " +
+					log.appendMsg("PDB", "Data type name collision - unable to define " +
 						compositeDefinition.kind.getCamelName() + ": " + compositeDefinition.name);
 					continue;
 				}
@@ -181,8 +180,8 @@ public class ApplyDataTypes {
 				Composite composite =
 					pdbParser.createComposite(compositeDefinition.kind, compositeDefinition.name);
 				if (composite == null) {
-					log.appendMsg("Unsupported datatype kind (" + compositeDefinition.kind + "): " +
-						compositeDefinition.name);
+					log.appendMsg("PDB", "Unsupported datatype kind (" + compositeDefinition.kind +
+						"): " + compositeDefinition.name);
 					continue;
 				}
 //								if (!isClasses) {

@@ -482,9 +482,9 @@ bool FlowInfo::setFallthruBound(Address &bound)
   if (iter!=visited.begin()) {
     --iter;			// Last range less than or equal to us
     if (addr == (*iter).first) { // If we have already visited this address
-      addrlist.pop_back();	// Throw it away
       PcodeOp *op = target(addr); // But make sure the address
       data.opMarkStartBasic(op); // starts a basic block
+      addrlist.pop_back();	// Throw it away
       return false;
     }
     if (addr < (*iter).first + (*iter).second.size)
@@ -1177,6 +1177,8 @@ void FlowInfo::doInjection(InjectPayload *payload,InjectContext &icontext,PcodeO
       data.opMarkStartBasic(*iter); // as start of basic block
   }
 
+  if (payload->isIncidentalCopy())
+    obank.markIncidentalCopy(firstop, lastop);
   obank.moveSequenceDead(firstop,lastop,op); // Move the injection to right after the call
 
   map<Address,VisitStat>::iterator viter = visited.find(op->getAddr());

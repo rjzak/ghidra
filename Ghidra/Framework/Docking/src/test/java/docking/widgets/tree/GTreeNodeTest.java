@@ -25,9 +25,22 @@ import javax.swing.tree.TreePath;
 import org.junit.Before;
 import org.junit.Test;
 
+import docking.test.AbstractDockingTest;
 import docking.widgets.tree.support.GTreeFilter;
+import ghidra.util.Swing;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
+
+/**
+ * Note: This test does not extend {@link AbstractDockingTest}.  Extending that class sets up
+ * {@link Swing#runNow(Runnable)} methods so that they actually run on the swing thread; otherwise
+ * they run on the calling thread.  Normally GTreeNode test would need that because the fire event
+ * calls normally check that the events are being sent on the swing thread.  In this file, all the
+ * tests use {@link TestNode} or {@link LazyTestNode} which override the event sending methods to
+ * instead put the events in a list so that the test can check that the correct events were generated.
+ * Since the methods that check for being on the swing thread are overridden, we can get away with
+ * not extending {@link AbstractDockingTest} and this allows the test to run about 100 times faster.
+ */
 
 public class GTreeNodeTest {
 	private List<TestEvent> events = new ArrayList<>();
@@ -61,7 +74,7 @@ public class GTreeNodeTest {
 	public void testClone() throws CloneNotSupportedException {
 		GTreeNode clone = node0.clone();
 
-		assertEquals(node0.getId(), clone.getId());
+		assertTrue(node0.equals(clone));
 		assertNull(clone.getParent());
 		assertFalse(clone.isLoaded());
 	}
@@ -70,6 +83,9 @@ public class GTreeNodeTest {
 	public void testGetParent() {
 		assertEquals(root, node0.getParent());
 		assertEquals(node0, node0_0.getParent());
+
+		root.setParent(new GTreeRootParentNode(null));
+		assertEquals(null, root.getParent());
 	}
 
 	@Test
@@ -234,6 +250,16 @@ public class GTreeNodeTest {
 	}
 
 	@Test
+	public void testGetLeafCountOnLazyNodes() throws CancelledException {
+		LazyGTestNode node = new LazyGTestNode("Test", 3);
+		assertEquals(1, node.getLeafCount());
+		node.getChildren();// force load
+		assertEquals(3, node.getLeafCount());
+		node.loadAll(TaskMonitor.DUMMY);
+		assertEquals(27, node.getLeafCount());
+	}
+
+	@Test
 	public void testGetIndexInParent() {
 		assertEquals(0, node0.getIndexInParent());
 		assertEquals(1, node1.getIndexInParent());
@@ -281,8 +307,8 @@ public class GTreeNodeTest {
 		assertNull(node1.getParent());
 		assertEquals(1, events.size());
 		TestEvent event = events.get(0);
-		assertEquals(EventType.STRUCTURE_CHANGED, event.type);
-		assertEquals(root, event.node);
+		assertEquals(EventType.NODE_REMOVED, event.type);
+		assertEquals(root, event.parent);
 	}
 
 	@Test
@@ -340,10 +366,10 @@ public class GTreeNodeTest {
 	@Test
 	public void testDispose() {
 		root.dispose();
-		assertTrue(!root.isLoaded());
+		assertFalse(root.isLoaded());
 		assertNull(node1.getParent());
 		assertNull(node1_0.getParent());
-		assertTrue(!node1.isLoaded());
+		assertFalse(node1.isLoaded());
 	}
 
 	@Test
@@ -372,9 +398,25 @@ public class GTreeNodeTest {
 	}
 
 	@Test
-	public void testLoadAllOnLazyTre() throws CancelledException {
-		GTreeNode node = new LazyGTestNode("test", 2);
+	public void testLoadAllOnLazyTree() throws CancelledException {
+		GTreeNode node = new LazyTestNode("test", 2);
 		assertEquals(13, node.loadAll(TaskMonitor.DUMMY));
+	}
+
+	@Test
+	public void testUnloadOnLazyNode() throws CancelledException {
+		GTreeLazyNode node = new LazyTestNode("test", 2);
+		node.loadAll(TaskMonitor.DUMMY);
+		assertTrue(node.isLoaded());
+
+		events.clear();
+		node.unloadChildren();
+		assertFalse(node.isLoaded());
+
+		assertEquals(1, events.size());
+		TestEvent event = events.get(0);
+		assertEquals(EventType.STRUCTURE_CHANGED, event.type);
+		assertEquals(node, event.node);
 	}
 
 	@Test
@@ -403,6 +445,42 @@ public class GTreeNodeTest {
 		assertEquals(node1_0, collect.get(6));
 	}
 
+	@Test
+	public void testEqualsAndHashCode() {
+		GTreeNode nodeA = new TestNode("AAA");
+		GTreeNode nodeB = new TestNode("BBB");
+		GTreeNode nodeAA = new TestNode("AAA");
+		assertEquals(nodeA, nodeAA);
+		assertNotEquals(nodeA, nodeB);
+		assertEquals(nodeA.hashCode(), nodeAA.hashCode());
+		assertNotEquals(nodeA.hashCode(), nodeB.hashCode());
+	}
+
+	@Test
+	public void testCantAddNodeTwice() {
+		node0 = new TestNode("No Dups");
+
+		int childCount = root.getChildCount();
+		root.addNode(node0);
+		assertEquals(childCount + 1, root.getChildCount());
+
+		// now make sure the count doesn't grow again
+		root.addNode(node0);
+		assertEquals(childCount + 1, root.getChildCount());
+
+		// try adding it with an index, still shouldn't get added
+		root.addNode(0, node0);
+		assertEquals(childCount + 1, root.getChildCount());
+
+	}
+
+	@Test
+	public void testCloneEquals() throws CloneNotSupportedException {
+		GTreeNode nodeA = new TestNode("AAA");
+		assertEquals(nodeA, nodeA.clone());
+		assertEquals(nodeA.hashCode(), nodeA.clone().hashCode());
+	}
+
 	private class TestFilter implements GTreeFilter {
 
 		private String text;
@@ -413,7 +491,7 @@ public class GTreeNodeTest {
 
 		@Override
 		public boolean acceptsNode(GTreeNode node) {
-			return node.getName().contains(text);
+			return node.getDisplayText().contains(text);
 		}
 
 		@Override
@@ -423,29 +501,56 @@ public class GTreeNodeTest {
 
 	}
 
+	private class LazyTestNode extends LazyGTestNode {
+
+		LazyTestNode(String name, int depth) {
+			super(name, depth);
+		}
+
+		@Override
+		public void doFireNodeStructureChanged() {
+			events.add(new TestEvent(EventType.STRUCTURE_CHANGED, null, this, -1));
+		}
+
+		@Override
+		public void doFireNodeChanged() {
+			events.add(new TestEvent(EventType.NODE_CHANGED, getParent(), this, -1));
+		}
+
+		@Override
+		protected void doFireNodeAdded(GTreeNode newNode) {
+			events.add(new TestEvent(EventType.NODE_ADDED, this, newNode, -1));
+		}
+
+		@Override
+		protected void doFireNodeRemoved(GTreeNode removedNode, int index) {
+			events.add(new TestEvent(EventType.NODE_REMOVED, this, removedNode, -1));
+		}
+	}
+
 	private class TestNode extends GTestNode {
 		TestNode(String name) {
 			super(name);
 		}
 
 		@Override
-		public void fireNodeStructureChanged(GTreeNode node) {
-			events.add(new TestEvent(EventType.STRUCTURE_CHANGED, null, node, -1));
+		public void doFireNodeStructureChanged() {
+			events.add(new TestEvent(EventType.STRUCTURE_CHANGED, null, this, -1));
 		}
 
 		@Override
-		public void fireNodeChanged(GTreeNode parent, GTreeNode node) {
-			events.add(new TestEvent(EventType.NODE_CHANGED, parent, node, -1));
+		public void doFireNodeChanged() {
+			events.add(new TestEvent(EventType.NODE_CHANGED, getParent(), this, -1));
 		}
 
 		@Override
-		protected void fireNodeAdded(GTreeNode parentNode, GTreeNode newNode) {
-			events.add(new TestEvent(EventType.NODE_ADDED, parentNode, newNode, -1));
+		protected void doFireNodeAdded(GTreeNode newNode) {
+			events.add(new TestEvent(EventType.NODE_ADDED, this, newNode, -1));
 		}
 
 		@Override
-		protected void fireNodeRemoved(GTreeNode parentNode, GTreeNode removedNode, int index) {
-			events.add(new TestEvent(EventType.NODE_REMOVED, parentNode, removedNode, index));
+		protected void doFireNodeRemoved(GTreeNode removedNode, int index) {
+			events.add(new TestEvent(EventType.NODE_REMOVED, this, removedNode, -1));
 		}
 	}
 

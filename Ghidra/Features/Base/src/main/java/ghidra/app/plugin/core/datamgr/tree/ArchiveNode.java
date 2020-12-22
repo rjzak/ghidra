@@ -22,7 +22,6 @@ import javax.swing.Icon;
 import docking.widgets.tree.GTree;
 import docking.widgets.tree.GTreeNode;
 import ghidra.app.plugin.core.datamgr.archive.Archive;
-import ghidra.app.plugin.core.datamgr.archive.SourceArchive;
 import ghidra.program.model.data.*;
 import ghidra.util.task.SwingUpdateManager;
 
@@ -63,7 +62,6 @@ public class ArchiveNode extends CategoryNode {
 		if (dataTypeManager == null) {
 			return; // some nodes do not have DataTypeManagers, like InvalidFileArchives
 		}
-
 		dataTypeManager.removeDataTypeManagerListener(listener);
 		dataTypeManager = archive.getDataTypeManager();
 		listener = new ArchiveNodeCategoryChangeListener();
@@ -224,7 +222,7 @@ public class ArchiveNode extends CategoryNode {
 			return null;
 		}
 
-		CategoryNode node = findCategoryNode(parentCategory);
+		CategoryNode node = findCategoryNode(parentCategory, loadChildren);
 		if (node == null) {
 			return null;
 		}

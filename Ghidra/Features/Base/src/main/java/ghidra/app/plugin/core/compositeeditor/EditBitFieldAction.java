@@ -16,10 +16,8 @@
 package ghidra.app.plugin.core.compositeeditor;
 
 import java.awt.Component;
-import java.awt.Window;
 
 import javax.swing.JTable;
-import javax.swing.SwingUtilities;
 
 import docking.ActionContext;
 import docking.DockingWindowManager;
@@ -33,13 +31,13 @@ import ghidra.util.exception.AssertException;
  */
 public class EditBitFieldAction extends CompositeEditorTableAction {
 
-	private final static String ACTION_NAME = "Edit Bitfield";
+	public final static String ACTION_NAME = "Edit Bitfield";
 	private final static String GROUP_NAME = BITFIELD_ACTION_GROUP;
 	private final static String DESCRIPTION = "Edit an existing bitfield";
-	private static String[] popupPath = new String[] { ACTION_NAME };
+	private static String[] POPUP_PATH = new String[] { ACTION_NAME };
 
 	public EditBitFieldAction(CompositeEditorProvider provider) {
-		super(provider, EDIT_ACTION_PREFIX + ACTION_NAME, GROUP_NAME, popupPath, null, null);
+		super(provider, EDIT_ACTION_PREFIX + ACTION_NAME, GROUP_NAME, POPUP_PATH, null, null);
 		setDescription(DESCRIPTION);
 		if (!(model instanceof CompEditorModel)) {
 			throw new AssertException("unsupported use");
@@ -77,8 +75,7 @@ public class EditBitFieldAction extends CompositeEditorTableAction {
 			provider.dtmService, dtComponent.getOrdinal(),
 			ordinal -> refreshTableAndSelection(editorModel, ordinal));
 		Component c = provider.getComponent();
-		Window w = SwingUtilities.windowForComponent(c);
-		DockingWindowManager.showDialog(w, dlg, c);
+		DockingWindowManager.showDialog(c, dlg);
 		requestTableFocus();
 	}
 

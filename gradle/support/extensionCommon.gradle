@@ -4,7 +4,7 @@ task zipExtensions (type: Zip) {
 	def p = this.project
 	
 	it.group 'private'
-	it.description "Creates a zip file for an extension module.  [gradle/support/distribution.gradle]"
+	it.description "Creates a zip file for an extension module.  [gradle/support/extensionCommon.gradle]"
 	it.archiveName "${rootProject.ext.ZIP_NAME_PREFIX}_${p.name}.zip"
 	it.destinationDir rootProject.ext.DISTRIBUTION_DIR
 	
@@ -61,7 +61,7 @@ task zipExtensions (type: Zip) {
 	/////////////////
 	gradle.taskGraph.whenReady { taskGraph ->
 		if (project.plugins.withType(JavaPlugin)) {
-			List<String> externalPaths = getExternalDependencies(p)
+			List<String> externalPaths = getExternalRuntimeDependencies(p)
 			externalPaths.each { path ->
 				from (path) {
 					into { getBaseProjectName(p) + "/lib" }

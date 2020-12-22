@@ -51,7 +51,7 @@ public class RttiModelTest extends AbstractRttiTest {
 		setupRtti4_32(builder, 0x01001340L, 0, 0, 0, "0x01005364", "0x0100137c");
 		Address address = builder.addr(0x01001340L);
 		checkInvalidModel(new Rtti4Model(program, address, defaultValidationOptions),
-			"TypeDescriptor data type at 01005364 doesn't point to a vfTable address in a loaded and initialized memory block.");
+			"No vf table pointer is defined for this TypeDescriptor model.");
 	}
 
 	@Test
@@ -62,7 +62,7 @@ public class RttiModelTest extends AbstractRttiTest {
 		setupRtti0_32(builder, 0x01001364, "0x01007700", "0x0", "stuff");
 		Address address = builder.addr(0x01001340L);
 		checkInvalidModel(new Rtti4Model(program, address, defaultValidationOptions),
-			"TypeDescriptor data type at 01001364 doesn't point to a vfTable address in a loaded and initialized memory block.");
+			"No vf table pointer is defined for this TypeDescriptor model.");
 	}
 
 	@Test
@@ -509,23 +509,6 @@ public class RttiModelTest extends AbstractRttiTest {
 		checkVfTableModel(program, 0x1010031d0L, 0x10100324cL, 0x1010031d8L,
 			new long[] { 0x101001260L, 0x1010012a0L, 0x101001120L });
 
-	}
-
-	@Test
-	public void testInvalidRtti4_64NonVS() throws Exception {
-		ProgramBuilder builder = build64BitX86NonVS();
-		ProgramDB program = builder.getProgram();
-		setupRtti4_32(builder, 0x101001340L, 0, 0, 0, "0x00005364", "0x0000137c");
-		Address address = builder.addr(0x101001340L);
-		Rtti4Model model = new Rtti4Model(program, address, defaultValidationOptions);
-		try {
-			model.validate();
-		}
-		catch (InvalidDataTypeException e) {
-			assertEquals(
-				"RTTICompleteObjectLocator data type model is only valid for Visual Studio windows PE.",
-				e.getMessage());
-		}
 	}
 
 	@Test

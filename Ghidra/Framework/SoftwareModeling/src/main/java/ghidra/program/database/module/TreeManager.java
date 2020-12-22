@@ -78,23 +78,23 @@ public class TreeManager implements ManagerDB {
 	static final Schema PARENT_CHILD_SCHEMA = createParentChildSchema();
 
 	private static Schema createTreeSchema() {
-		return new Schema(0, "Key", new Class[] { StringField.class, LongField.class },
+		return new Schema(0, "Key", new Field[] { StringField.INSTANCE, LongField.INSTANCE },
 			new String[] { "Name", "Modification Number" });
 	}
 
 	private static Schema createModuleSchema() {
-		return new Schema(0, "Key", new Class[] { StringField.class, StringField.class },
+		return new Schema(0, "Key", new Field[] { StringField.INSTANCE, StringField.INSTANCE },
 			new String[] { "Name", "Comments" });
 	}
 
 	private static Schema createFragmentSchema() {
-		return new Schema(0, "Key", new Class[] { StringField.class, StringField.class },
+		return new Schema(0, "Key", new Field[] { StringField.INSTANCE, StringField.INSTANCE },
 			new String[] { "Name", "Comments" });
 	}
 
 	private static Schema createParentChildSchema() {
 		return new Schema(0, "Key",
-			new Class[] { LongField.class, LongField.class, IntField.class },
+			new Field[] { LongField.INSTANCE, LongField.INSTANCE, IntField.INSTANCE },
 			new String[] { "Parent ID", "Child ID", "Child Index" });
 	}
 
@@ -486,8 +486,12 @@ public class TreeManager implements ManagerDB {
 
 	/**
 	 * Move a memory block to new place.
-	 * @param fromRange old place
-	 * @param toRange new place
+	 * @param fromAddr old place
+	 * @param toAddr new place
+	 * @param length the length of the address range to move
+	 * @param monitor the current task monitor
+	 * @throws AddressOverflowException if an address overflow occurs.
+	 * @throws CancelledException if the task is cancelled.
 	 */
 	@Override
 	public void moveAddressRange(Address fromAddr, Address toAddr, long length, TaskMonitor monitor)
@@ -685,7 +689,7 @@ public class TreeManager implements ManagerDB {
 
 	/**
 	 * Get the root module for the tree that has the given ID.
-	 * @param ID of the tree
+	 * @param treeID ID of the tree
 	 * @return root module
 	 */
 	public ProgramModule getRootModule(long treeID) {

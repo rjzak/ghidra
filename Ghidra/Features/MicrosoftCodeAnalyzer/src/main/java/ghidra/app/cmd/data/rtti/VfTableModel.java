@@ -15,7 +15,7 @@
  */
 package ghidra.app.cmd.data.rtti;
 
-import static ghidra.app.util.datatype.microsoft.MSDataTypeUtils.getAbsoluteAddress;
+import static ghidra.app.util.datatype.microsoft.MSDataTypeUtils.*;
 
 import ghidra.app.cmd.data.AbstractCreateDataTypeModel;
 import ghidra.app.cmd.data.TypeDescriptorModel;
@@ -40,11 +40,11 @@ public class VfTableModel extends AbstractCreateDataTypeModel {
 
 	private DataType dataType;
 	private Rtti4Model rtti4Model;
-	private int elementCount = -1;
 
 	private Program lastProgram;
 	private DataType lastDataType;
 	private int lastElementCount = -1;
+	private int elementCount = 0;
 
 	/**
 	 * Creates the model for the vf table data.
@@ -55,8 +55,18 @@ public class VfTableModel extends AbstractCreateDataTypeModel {
 	 */
 	public VfTableModel(Program program, Address vfTableAddress,
 			DataValidationOptions validationOptions) {
-		super(program, RttiUtil.getVfTableCount(program, vfTableAddress), vfTableAddress,
+		// use one for the data type element count, because there is only one array of some element size
+		super(program, 1, vfTableAddress,
 			validationOptions);
+		elementCount= RttiUtil.getVfTableCount(program, vfTableAddress);
+	}
+	
+	/**
+	 * Get the number of vftable elements in this vftable
+	 * @return number of elements
+	 */
+	public int getElementCount() {
+		return elementCount;
 	}
 
 	@Override
@@ -80,7 +90,7 @@ public class VfTableModel extends AbstractCreateDataTypeModel {
 		long entrySize = individualEntryDataType.getLength();
 
 		// Each entry is a pointer to where a function can possibly be created.
-		long numEntries = RttiUtil.getVfTableCount(program, startAddress);
+		long numEntries = elementCount;
 		if (numEntries == 0) {
 			throw new InvalidDataTypeException(
 				getName() + " data type at " + getAddress() + " doesn't have a valid vf table.");
@@ -121,9 +131,8 @@ public class VfTableModel extends AbstractCreateDataTypeModel {
 
 			lastProgram = program;
 			lastDataType = null;
-			lastElementCount = -1;
-
-			lastElementCount = RttiUtil.getVfTableCount(program, getAddress());
+			lastElementCount = elementCount;
+			
 			if (lastElementCount > 0) {
 				DataTypeManager dataTypeManager = program.getDataTypeManager();
 				PointerDataType pointerDt = new PointerDataType(dataTypeManager);
@@ -166,17 +175,6 @@ public class VfTableModel extends AbstractCreateDataTypeModel {
 		int defaultPointerSize = getDefaultPointerSize();
 		Address address = tableAddress.add(defaultPointerSize * tableElementIndex);
 		return getAbsoluteAddress(getProgram(), address);
-	}
-
-	/**
-	 * Gets the number of elements in the vf table. Returns 0 if this model isn't for a valid vf table.
-	 * @return the number of vf table elements or 0.
-	 */
-	public int getElementCount() {
-		if (elementCount == -1) {
-			elementCount = RttiUtil.getVfTableCount(getProgram(), getAddress());
-		}
-		return elementCount;
 	}
 
 	/**

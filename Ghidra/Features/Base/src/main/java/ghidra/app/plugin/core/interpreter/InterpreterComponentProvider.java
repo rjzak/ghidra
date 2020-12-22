@@ -158,6 +158,15 @@ public class InterpreterComponentProvider extends ComponentProviderAdapter
 		return panel.getErrWriter();
 	}
 
+	/**
+	 * For testing purposes, but should probably be promoted to InterpreterConsole interface
+	 * 
+	 * @return the prompt;
+	 */
+	public String getPrompt() {
+		return panel.getPrompt();
+	}
+
 	@Override
 	public void setPrompt(String prompt) {
 		panel.setPrompt(prompt);
@@ -171,16 +180,48 @@ public class InterpreterComponentProvider extends ComponentProviderAdapter
 
 	@Override
 	public void componentActivated() {
-		// Call the callbacks
-		firstActivationCallbacks.forEach(l -> l.call());
 
-		// Since we only care about the first activation, clear the list
-		// of callbacks so future activations don't trigger anything.
+		// Since we only care about the first activation, clear the list of callbacks so future 
+		// activations don't trigger anything.  First save them off to a local list so when we
+		// process them we aren't affected by concurrent modification due to reentrance.
+		List<Callback> callbacks = new ArrayList<>(firstActivationCallbacks);
 		firstActivationCallbacks.clear();
+
+		// Call the callbacks
+		callbacks.forEach(l -> l.call());
 	}
 
 	@Override
 	public void addFirstActivationCallback(Callback activationCallback) {
 		firstActivationCallbacks.add(activationCallback);
+	}
+
+	@Override
+	public boolean isInputPermitted() {
+		return panel.isInputPermitted();
+	}
+
+	@Override
+	public void setInputPermitted(boolean permitted) {
+		panel.setInputPermitted(permitted);
+	}
+
+	@Override
+	public void show() {
+		tool.showComponentProvider(this, true);
+	}
+
+	@Override
+	public void updateTitle() {
+		tool.updateTitle(this);
+	}
+
+	/**
+	 * For testing purposes only
+	 * 
+	 * @return the text in the output buffer
+	 */
+	public String getOutputText() {
+		return panel.getOutputText();
 	}
 }

@@ -75,11 +75,11 @@ EXTERNAL_CONSOLEEXT_NAMES=$(subst .cc,,$(notdir $(EXTERNAL_CONSOLEEXT_SOURCE)))
 CORE=	xml space float address pcoderaw translate opcodes globalcontext
 # Additional core files for any projects that decompile
 DECCORE=capability architecture options graph cover block cast typeop database cpool \
-	comment fspec action loadimage grammar varnode op \
+	comment stringmanage fspec action loadimage grammar varnode op \
 	type variable varmap jumptable emulate emulateutil flow userop \
 	funcdata funcdata_block funcdata_op funcdata_varnode pcodeinject \
 	heritage prefersplit rangeutil ruleaction subflow blockaction merge double \
-	coreaction condexe override dynamic crc32 prettyprint \
+	transform coreaction condexe override dynamic crc32 prettyprint \
 	printlanguage printc printjava memstate opbehavior paramid $(COREEXT_NAMES)
 # Files used for any project that use the sleigh decoder
 SLEIGH=	sleigh pcodeparse pcodecompile sleighbase slghsymbol \
@@ -87,7 +87,7 @@ SLEIGH=	sleigh pcodeparse pcodecompile sleighbase slghsymbol \
 # Additional files for the GHIDRA specific build
 GHIDRA=	ghidra_arch inject_ghidra ghidra_translate loadimage_ghidra \
 	typegrp_ghidra database_ghidra ghidra_context cpool_ghidra \
-	ghidra_process comment_ghidra $(GHIDRAEXT_NAMES)
+	ghidra_process comment_ghidra string_ghidra $(GHIDRAEXT_NAMES)
 # Additional files specific to the sleigh compiler
 SLACOMP=slgh_compile slghparse slghscan
 # Additional special files that should not be considered part of the library
@@ -140,7 +140,7 @@ SLEIGH_OPT_OBJS=$(SLEIGH_NAMES:%=sla_opt/%.o)
 LIBSLA_DBG_OBJS=$(LIBSLA_NAMES:%=com_dbg/%.o)
 LIBSLA_OPT_OBJS=$(LIBSLA_NAMES:%=com_opt/%.o)
 LIBSLA_SOURCE=$(LIBSLA_NAMES:%=%.cc) $(LIBSLA_NAMES:%=%.hh) \
-	$(SLACOMP:%=%.cc) slgh_compile.hh slghparse.tab.hh types.h \
+	$(SLACOMP:%=%.cc) slgh_compile.hh slghparse.hh types.h \
 	partmap.hh error.hh slghparse.y pcodeparse.y xml.y slghscan.l loadimage_bfd.hh loadimage_bfd.cc
 LIBDECOMP_DBG_OBJS=$(LIBDECOMP_NAMES:%=com_dbg/%.o)
 LIBDECOMP_OPT_OBJS=$(LIBDECOMP_NAMES:%=com_opt/%.o)
@@ -223,16 +223,14 @@ pcodeparse.cc:	pcodeparse.y
 	$(YACC) -p pcode -o $@ $<
 slghparse.cc:	slghparse.y
 	$(YACC) -d -o $@ $<
-	mv slghparse.hh slghparse.tab.hh
 slghscan.cc:	slghscan.l
 	$(LEX) -o$@ $<
 ruleparse.cc:	ruleparse.y
 	$(YACC) -p ruleparse -d -o $@ $<
-	mv ruleparse.hh ruleparse.tab.hh
 
-slghparse.tab.hh:	slghparse.y slghparse.cc
-slghscan.cc:	slghparse.tab.hh
-ruleparse.tab.hh:	ruleparse.y ruleparse.cc
+slghparse.hh:	slghparse.y slghparse.cc
+slghscan.cc:	slghparse.hh slgh_compile.hh
+ruleparse.hh:	ruleparse.y ruleparse.cc
 
 decomp_dbg:	$(COMMANDLINE_DBG_OBJS)
 	$(CXX) $(DBG_CXXFLAGS) $(ARCH_TYPE) -o decomp_dbg $(COMMANDLINE_DBG_OBJS) $(BFDLIB) $(LNK)
@@ -382,7 +380,6 @@ resetgcov:
 
 reallyclean:	clean	
 	rm -rf coreext_*.cc coreext_*.hh ghidraext_*.cc ghidraext_*.hh consoleext_*.cc consoleext_*.hh
-	rm -rf grammar.cc xml.cc pcodeparse.cc slghparse.cc slghparse.tab.hh slghscan.cc ruleparse.cc ruleparse.tab.hh
 	rm -rf com_dbg com_opt ghi_dbg ghi_opt sla_dbg sla_opt
 	rm -f $(EXECS) TAGS *~
 

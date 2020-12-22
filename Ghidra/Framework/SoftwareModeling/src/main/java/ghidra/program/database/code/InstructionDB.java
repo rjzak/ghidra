@@ -59,7 +59,7 @@ public class InstructionDB extends CodeUnitDB implements Instruction, Instructio
 	 * @param address min address of this instruction
 	 * @param addr database key
 	 * @param proto instruction prototype
-	 * @param protoID ID for the prototype
+	 * @param flags flow override flags
 	 */
 	public InstructionDB(CodeManager codeMgr, DBObjectCache<? extends CodeUnitDB> cache,
 			Address address, long addr, InstructionPrototype proto, byte flags) {
@@ -90,7 +90,9 @@ public class InstructionDB extends CodeUnitDB implements Instruction, Instructio
 				return true;
 			}
 		}
-		// ensure that record provided corresponds to an InstructionDB record
+		// ensure that record provided corresponds to a DataDB record
+		// since following an undo/redo the record could correspond to
+		// a different type of code unit (hopefully with a different record schema)
 		else if (!rec.hasSameSchema(InstDBAdapter.INSTRUCTION_SCHEMA)) {
 			return true;
 		}

@@ -16,7 +16,8 @@
 package docking.widgets.tree;
 
 import docking.widgets.tree.support.GTreeFilter;
-import docking.widgets.tree.tasks.*;
+import docking.widgets.tree.tasks.GTreeClearTreeFilterTask;
+import docking.widgets.tree.tasks.GTreeExpandAllTask;
 import ghidra.util.Msg;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
@@ -24,21 +25,19 @@ import ghidra.util.task.TaskMonitor;
 public class GTreeFilterTask extends GTreeTask {
 
 	private final GTreeFilter filter;
-	private final GTreeState defaultRestoreState;
 	private boolean cancelledProgramatically;
 
 	public GTreeFilterTask(GTree tree, GTreeFilter filter) {
 		super(tree);
 		this.filter = filter;
 
-		// save this now, before we modify the tree
-		defaultRestoreState = tree.getTreeState();
+		tree.saveFilterRestoreState();
 	}
 
 	@Override
 	public void run(TaskMonitor monitor) {
 		if (filter == null) {
-			tree.restoreNonFilteredRootNode();
+			runOnSwingThread(() -> tree.swingRestoreNonFilteredRootNode());
 			restoreInSameTask(monitor);
 			return;
 		}
@@ -55,7 +54,7 @@ public class GTreeFilterTask extends GTreeTask {
 			monitor.setMessage("Filtering...");
 			monitor.initialize(nodeCount);
 			GTreeNode filtered = root.filter(filter, monitor);
-			runOnSwingThread(() -> tree.setFilteredRootNode(filtered));
+			runOnSwingThread(() -> tree.swingSetFilteredRootNode(filtered));
 			if (filter.showFilterMatches()) {
 				expandInSameTask(monitor, filtered);
 				restoreInSameTask(monitor);
@@ -81,8 +80,7 @@ public class GTreeFilterTask extends GTreeTask {
 
 	private void restoreInSameTask(TaskMonitor monitor) {
 
-		GTreeState existingState = tree.getRestoreTreeState();
-		GTreeState state = (existingState == null) ? defaultRestoreState : existingState;
+		GTreeState state = tree.getFilterRestoreState();
 		GTreeRestoreTreeStateTask restoreTask = new GTreeRestoreTreeStateTask(tree, state);
 		restoreTask.run(monitor);
 	}

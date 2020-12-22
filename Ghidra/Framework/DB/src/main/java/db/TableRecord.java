@@ -1,6 +1,5 @@
 /* ###
  * IP: GHIDRA
- * REVIEWED: YES
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,12 +15,16 @@
  */
 package db;
 
+import java.io.IOException;
+
+import db.Field.UnsupportedFieldException;
+
 /**
  * <code>TableRecord</code> manages information about a table.  Each TableRecord 
  * corresponds to a stored record within the master table.
  */
 class TableRecord implements Comparable<TableRecord> {
-	
+
 	private static final int NAME_COLUMN = 0;
 	private static final int VERSION_COLUMN = 1;
 	private static final int BUFFER_ID_COLUMN = 2;
@@ -31,37 +34,30 @@ class TableRecord implements Comparable<TableRecord> {
 	private static final int COLUMN_INDEXED_COLUMN = 6;
 	private static final int MAX_KEY_COLUMN = 7;
 	private static final int RECORD_COUNT_COLUMN = 8;
-	
-	private static Class<?>[] fieldClasses = {
-		StringField.class, 	// name of table 
-	    IntField.class,    	// Schema version
-	    IntField.class,    	// Root buffer ID (first buffer)
-	    ByteField.class,		// Key field type 
-	    BinaryField.class, 	// Schema field types
-	    StringField.class,		// Schema key/field names
-	    IntField.class,		// indexing column  (-1 = primary)
-	    LongField.class,		// max primary key value ever used
-	    IntField.class 		// number of records
+
+	//@formatter:off
+	private static Field[] fields = { 
+		StringField.INSTANCE, 	// name of table 
+		IntField.INSTANCE,    	// Schema version
+		IntField.INSTANCE,    	// Root buffer ID (first buffer)
+		ByteField.INSTANCE,		// Key field type 
+		BinaryField.INSTANCE, 	// Schema field types
+		StringField.INSTANCE,	// Schema key/field names
+		IntField.INSTANCE,		// indexing column  (-1 = primary)
+		LongField.INSTANCE,		// max primary key value ever used
+		IntField.INSTANCE 		// number of records
 	};
-	
-	private static String[] tableRecordFieldNames = {
-		"TableName",
-		"SchemaVersion",
-		"RootBufferId",
-		"KeyType",
-		"FieldTypes",
-		"FieldNames",
-		"IndexColumn",
-		"MaxKey",
-		"RecordCount"
-	};
-	
-	private static Schema schema = new Schema(0, "TableNum", fieldClasses, tableRecordFieldNames);
-	
+	//@formatter:on
+
+	private static String[] tableRecordFieldNames = { "TableName", "SchemaVersion", "RootBufferId",
+		"KeyType", "FieldTypes", "FieldNames", "IndexColumn", "MaxKey", "RecordCount" };
+
+	private static Schema schema = new Schema(0, "TableNum", fields, tableRecordFieldNames);
+
 	private Record record;
-	
+	private Schema tableSchema;
 	private Table table;
-	
+
 	/**
 	 * Construct a new master table record.
 	 * @param tableNum table number assigned by master table
@@ -70,10 +66,11 @@ class TableRecord implements Comparable<TableRecord> {
 	 * @param indexedColumn primary table index key column, or -1 for primary table
 	 */
 	TableRecord(long tableNum, String name, Schema tableSchema, int indexedColumn) {
-		record = schema.createRecord(tableNum);	
+		this.tableSchema = tableSchema;
+		record = schema.createRecord(tableNum);
 		record.setString(NAME_COLUMN, name);
-		record.setByteValue(KEY_TYPE_COLUMN, tableSchema.getKeyFieldType().getFieldType());
-		record.setBinaryData(FIELD_TYPES_COLUMN, tableSchema.getFieldTypes());
+		record.setByteValue(KEY_TYPE_COLUMN, tableSchema.getEncodedKeyFieldType());
+		record.setBinaryData(FIELD_TYPES_COLUMN, tableSchema.getEncodedFieldTypes());
 		record.setString(FIELD_NAMES_COLUMN, tableSchema.getPackedFieldNames());
 		record.setIntValue(VERSION_COLUMN, tableSchema.getVersion());
 		record.setIntValue(COLUMN_INDEXED_COLUMN, indexedColumn);
@@ -81,15 +78,19 @@ class TableRecord implements Comparable<TableRecord> {
 		record.setIntValue(RECORD_COUNT_COLUMN, 0);
 		record.setIntValue(BUFFER_ID_COLUMN, -1);   // first buffer not yet allocated
 	}
-	
+
 	/**
 	 * Construct an existing master table storage record.
+	 * @param dbh database handle
 	 * @param record master table storage record.
+	 * @throws UnsupportedFieldException stored schema contains unsupported field
+	 * @throws IOException if IO error occurs
 	 */
-	TableRecord(Record record) {
+	TableRecord(DBHandle dbh, Record record) throws IOException {
+		this.tableSchema = parseSchema(dbh, record);
 		this.record = record;
 	}
-	
+
 	/**
 	 * Get the underlying storage record for this instance.
 	 * @return master table storage record.
@@ -97,7 +98,7 @@ class TableRecord implements Comparable<TableRecord> {
 	Record getRecord() {
 		return record;
 	}
-	
+
 	/**
 	 * Set the table instance associated with this master table record.
 	 * @param table table instance
@@ -105,19 +106,23 @@ class TableRecord implements Comparable<TableRecord> {
 	void setTable(Table table) {
 		this.table = table;
 	}
-	
+
 	/**
 	 * Set the storage record for this instance.
 	 * Data is refreshed from the record provided.
+	 * @param dbh database handle
 	 * @param record master table storage record.
+	 * @throws UnsupportedFieldException stored schema contains unsupported field
+	 * @throws IOException if IO error occurs
 	 */
-	void setRecord(Record record) {
+	void setRecord(DBHandle dbh, Record record) throws IOException {
+		this.tableSchema = parseSchema(dbh, record);
 		this.record = record;
 		if (table != null) {
 			table.tableRecordChanged();
 		}
 	}
-	
+
 	/**
 	 * Mark this instance as invalid.
 	 * This method should be invoked if the associated master table record
@@ -129,6 +134,7 @@ class TableRecord implements Comparable<TableRecord> {
 			table = null;
 		}
 		this.record = null;
+		this.tableSchema = null;
 	}
 
 	/**
@@ -136,9 +142,9 @@ class TableRecord implements Comparable<TableRecord> {
 	 * @return table number
 	 */
 	long getTableNum() {
-		return record.getKey();	
+		return record.getKey();
 	}
-	
+
 	/**
 	 * Get the table name
 	 * @return table name
@@ -146,26 +152,67 @@ class TableRecord implements Comparable<TableRecord> {
 	String getName() {
 		return record.getString(NAME_COLUMN);
 	}
-	
+
 	/**
 	 * Set the table name
-	 * @param name
+	 * @param name table name
 	 */
 	void setName(String name) {
 		record.setString(NAME_COLUMN, name);
 	}
-	
+
+	/**
+	 * 
+	 * @param dbh database handle
+	 * @param record record which defines table schema
+	 * @return table schema
+	 * @throws UnsupportedFieldException stored schema contains unsupported field
+	 * @throws IOException if IO error occurs
+	 */
+	private static Schema parseSchema(DBHandle dbh, Record record) throws IOException {
+		Schema tableSchema =
+			new Schema(record.getIntValue(VERSION_COLUMN), record.getByteValue(KEY_TYPE_COLUMN),
+				record.getBinaryData(FIELD_TYPES_COLUMN), record.getString(FIELD_NAMES_COLUMN));
+		forceUseOfVariableLengthKeyNodesIfNeeded(dbh, tableSchema,
+			record.getIntValue(BUFFER_ID_COLUMN));
+		return tableSchema;
+	}
+
+	/**
+	 * Determine if legacy schema should be forced to use {@link VarKeyNode} 
+	 * table storage for compatibility. Root buffer node for applicable
+	 * primitive fixed-length key types will be checked.
+	 * @param dbh database handle
+	 * @param tableSchema table schema to be checked
+	 * @param rootBufferId table root buffer ID
+	 * @throws IOException if IO error occurs
+	 */
+	private static void forceUseOfVariableLengthKeyNodesIfNeeded(DBHandle dbh, Schema tableSchema,
+			int rootBufferId) throws IOException {
+		if (rootBufferId < 0) {
+			return;
+		}
+		Field keyType = tableSchema.getKeyFieldType();
+		if (keyType.isVariableLength()) {
+			return;
+		}
+		if (keyType instanceof LongField || keyType instanceof IndexField ||
+			keyType instanceof FixedField) {
+			return;
+		}
+		if (NodeMgr.isVarKeyNode(dbh.getBufferMgr(), rootBufferId)) {
+			tableSchema.forceUseOfVariableLengthKeyNodes();
+		}
+	}
+
 	/**
 	 * Get the table schema
 	 * @return table schema
 	 */
 	Schema getSchema() {
-		return new Schema(record.getIntValue(VERSION_COLUMN),
-			record.getByteValue(KEY_TYPE_COLUMN),
-			record.getBinaryData(FIELD_TYPES_COLUMN),
-			record.getString(FIELD_NAMES_COLUMN));
+		return tableSchema;
 	}
-	
+
 	/**
 	 * Get the table's root buffer ID
 	 * @return root buffer ID
@@ -173,7 +220,7 @@ class TableRecord implements Comparable<TableRecord> {
 	int getRootBufferId() {
 		return record.getIntValue(BUFFER_ID_COLUMN);
 	}
-	
+
 	/**
 	 * Set the tables root buffer ID
 	 * @param id table's root buffer ID
@@ -181,7 +228,7 @@ class TableRecord implements Comparable<TableRecord> {
 	void setRootBufferId(int id) {
 		record.setIntValue(BUFFER_ID_COLUMN, id);
 	}
-	
+
 	/**
 	 * Get the table's maximum long key value.
 	 * @return table's maximum long key value.
@@ -189,15 +236,15 @@ class TableRecord implements Comparable<TableRecord> {
 	long getMaxKey() {
 		return record.getLongValue(MAX_KEY_COLUMN);
 	}
-	
+
 	/**
 	 * Set table's maximum long key value.
 	 * @param maxKey table's maximum long key value.
 	 */
 	void setMaxKey(long maxKey) {
-		record.setLongValue(MAX_KEY_COLUMN, maxKey);	
+		record.setLongValue(MAX_KEY_COLUMN, maxKey);
 	}
-	
+
 	/**
 	 * Get the table's current record count
 	 * @return table's record count
@@ -205,7 +252,7 @@ class TableRecord implements Comparable<TableRecord> {
 	int getRecordCount() {
 		return record.getIntValue(RECORD_COUNT_COLUMN);
 	}
-	
+
 	/**
 	 * Set the table's current record count
 	 * @param count current record count
@@ -213,7 +260,7 @@ class TableRecord implements Comparable<TableRecord> {
 	void setRecordCount(int count) {
 		record.setIntValue(RECORD_COUNT_COLUMN, count);
 	}
-	
+
 	/**
 	 * Get the column number which is indexed by this table.
 	 * A value of -1 indicates that this is the primary table indexed
@@ -225,7 +272,7 @@ class TableRecord implements Comparable<TableRecord> {
 	int getIndexedColumn() {
 		return record.getIntValue(COLUMN_INDEXED_COLUMN);
 	}
-	
+
 	/**
 	 * Get the master table record storage schema
 	 * @return master table record storage schema
@@ -233,12 +280,13 @@ class TableRecord implements Comparable<TableRecord> {
 	static Schema getTableRecordSchema() {
 		return schema;
 	}
-	
+
 	/**
 	 * Compares the key associated with this table record with the 
 	 * key of another table record (obj).
 	 * @see java.lang.Comparable#compareTo(java.lang.Object)
 	 */
+	@Override
 	public int compareTo(TableRecord otherRecord) {
 		long myKey = record.getKey();
 		long otherKey = otherRecord.record.getKey();

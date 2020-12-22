@@ -33,7 +33,7 @@ import generic.test.AbstractGTest;
 import generic.test.AbstractGenericTest;
 import ghidra.framework.main.FrontEndTool;
 import ghidra.framework.main.SharedProjectUtil;
-import ghidra.framework.main.datatable.ProjectDataActionContext;
+import ghidra.framework.main.datatable.ProjectDataContext;
 import ghidra.framework.main.datatree.*;
 import ghidra.framework.model.*;
 import ghidra.framework.plugintool.PluginTool;
@@ -322,7 +322,7 @@ public class FrontEndTestEnv {
 			}
 		}
 
-		return new ProjectDataActionContext(null, rootFolder.getProjectData(), nodes[0], folderList,
+		return new ProjectDataContext(null, rootFolder.getProjectData(), nodes[0], folderList,
 			fileList, tree, true);
 
 	}
@@ -335,8 +335,8 @@ public class FrontEndTestEnv {
 		return env.showTool();
 	}
 
-	public List<Tool> getTools() {
-		Tool[] tools = frontEndTool.getProject().getToolManager().getActiveWorkspace().getTools();
+	public List<PluginTool> getTools() {
+		PluginTool[] tools = frontEndTool.getProject().getToolManager().getActiveWorkspace().getTools();
 		return new ArrayList<>(Arrays.asList(tools));
 	}
 
@@ -379,7 +379,7 @@ public class FrontEndTestEnv {
 		if (exclusive) {
 			JCheckBox cb = AbstractDockingTest.findComponent(dialog, JCheckBox.class);
 			assertNotNull(cb);
-			assertEquals("Request exclusive check out", cb.getText());
+			assertEquals("Request exclusive checkout", cb.getText());
 			runSwing(() -> cb.setSelected(true));
 		}
 

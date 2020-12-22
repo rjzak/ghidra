@@ -28,6 +28,10 @@ public abstract class ToggleDockingAction extends DockingAction implements Toggl
 		super(name, owner);
 	}
 
+	public ToggleDockingAction(String name, String owner, KeyBindingType keyBindingType) {
+		super(name, owner, keyBindingType);
+	}
+
 	public ToggleDockingAction(String name, String owner, boolean supportsKeyBindings) {
 		super(name, owner, supportsKeyBindings);
 	}
@@ -39,6 +43,9 @@ public abstract class ToggleDockingAction extends DockingAction implements Toggl
 
 	@Override
 	public void setSelected(boolean newValue) {
+		if (isSelected == newValue) {
+			return;
+		}
 		isSelected = newValue;
 		firePropertyChanged(SELECTED_STATE_PROPERTY, !isSelected, isSelected);
 	}
@@ -61,4 +68,5 @@ public abstract class ToggleDockingAction extends DockingAction implements Toggl
 	public void actionPerformed(ActionContext context) {
 		// defined by subclasses
 	}
+
 }
