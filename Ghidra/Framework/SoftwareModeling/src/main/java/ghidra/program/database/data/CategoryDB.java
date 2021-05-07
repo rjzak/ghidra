@@ -19,8 +19,8 @@ import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
+import db.DBRecord;
 import db.Field;
-import db.Record;
 import ghidra.program.database.DBObjectCache;
 import ghidra.program.database.DatabaseObject;
 import ghidra.program.model.data.*;
@@ -92,8 +92,7 @@ class CategoryDB extends DatabaseObject implements Category {
 		}
 		mgr.lock.acquire();
 		try {
-			checkIsValid();
-			if (isRoot() || isDeleted()) {
+			if (!checkIsValid() || isRoot()) {
 				categoryPath = CategoryPath.ROOT;
 			}
 			if (categoryPath == null) {
@@ -112,7 +111,7 @@ class CategoryDB extends DatabaseObject implements Category {
 	}
 
 	@Override
-	protected boolean refresh(Record rec) {
+	protected boolean refresh(DBRecord rec) {
 		subcategoryMap.clear();
 		dataTypeMap.clear();
 		conflictMap.clear();

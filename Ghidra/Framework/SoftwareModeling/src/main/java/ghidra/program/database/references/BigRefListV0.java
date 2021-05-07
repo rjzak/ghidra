@@ -55,24 +55,24 @@ class BigRefListV0 extends RefList {
 
 	private byte refLevel = -1;
 	private Table table;
-	private Record record;
+	private DBRecord record;
 
 	/**
 	 * Construct new empty reference list
 	 * @param address address associated with this list
 	 * @param adapter entry record storage adapter
 	 * @param addrMap address map for encoding/decoding addresses
-	 * @param program 
+	 * @param program associated Program
 	 * @param cache RefList object cache
 	 * @param isFrom true for from-adapter use, false for to-adapter use
-	 * @throws IOException 
+	 * @throws IOException if database IO error occurs
 	 */
 	BigRefListV0(Address address, RecordAdapter adapter, AddressMap addrMap, ProgramDB program,
 			DBObjectCache<RefList> cache, boolean isFrom) throws IOException {
 		super(addrMap.getKey(address, true), address, adapter, addrMap, program, cache, isFrom);
 		record = ToAdapter.TO_REFS_SCHEMA.createRecord(key);
-		table = program.getDBHandle().createTable(BASE_TABLE_NAME + Long.toHexString(key),
-			BIG_REFS_SCHEMA, new int[] { ADDRESS_COL });
+		table = program.getDBHandle()
+				.createTable(getTableName(), BIG_REFS_SCHEMA, new int[] { ADDRESS_COL });
 	}
 
 	/**
@@ -80,27 +80,32 @@ class BigRefListV0 extends RefList {
 	 * @param rec existing refList record
 	 * @param adapter entry record storage adapter
 	 * @param addrMap address map for encoding/decoding addresses
-	 * @param program
+	 * @param program associated Program
 	 * @param cache RefList object cache
 	 * @param isFrom true for from-adapter use, false for to-adapter use
+	 * @throws IOException if database IO error occurs
 	 */
-	BigRefListV0(Record rec, RecordAdapter adapter, AddressMap addrMap, ProgramDB program,
+	BigRefListV0(DBRecord rec, RecordAdapter adapter, AddressMap addrMap, ProgramDB program,
 			DBObjectCache<RefList> cache, boolean isFrom) throws IOException {
 		super(rec.getKey(), addrMap.decodeAddress(rec.getKey()), adapter, addrMap, program, cache,
 			isFrom);
 		if (rec.getBinaryData(ToAdapter.REF_DATA_COL) != null) {
 			throw new IllegalArgumentException("Invalid reference record");
 		}
-		String tableName = BASE_TABLE_NAME + Long.toHexString(rec.getKey());
-		table = program.getDBHandle().getTable(tableName);
+		table = program.getDBHandle().getTable(getTableName());
 		if (table == null) {
 			throw new IOException(
-				"BigRefList table not found for " + address + " (" + tableName + ")");
+				"BigRefList table not found for " + address + " (" + getTableName() + ")");
 		}
 		if (!isFrom) {
 			refLevel = rec.getByteValue(ToAdapter.REF_LEVEL_COL);
 		}
 		record = rec;
+	}
+
+	private String getTableName() {
+		String prefix = isFrom ? "From" : "";
+		return prefix + BASE_TABLE_NAME + Long.toHexString(key);
 	}
 
 	@Override
@@ -182,7 +187,7 @@ class BigRefListV0 extends RefList {
 		if (id < 0) {
 			id = 0;
 		}
-		Record refRec = BIG_REFS_SCHEMA.createRecord(id);
+		DBRecord refRec = BIG_REFS_SCHEMA.createRecord(id);
 		refRec.setLongValue(ADDRESS_COL, addrMap.getKey(isFrom ? toAddr : fromAddr, true));
 		RefListFlagsV0 flags =
 			new RefListFlagsV0(isPrimary, isOffset, symbolID >= 0, isShifted, source);
@@ -194,7 +199,7 @@ class BigRefListV0 extends RefList {
 		table.putRecord(refRec);
 	}
 
-	private ReferenceDB getRef(Record rec) {
+	private ReferenceDB getRef(DBRecord rec) {
 		long symbolID = -1;
 		long addr = rec.getLongValue(ADDRESS_COL);
 
@@ -272,7 +277,7 @@ class BigRefListV0 extends RefList {
 		}
 		RecordIterator iterator = table.iterator();
 		while (iterator.hasNext()) {
-			Record rec = iterator.next();
+			DBRecord rec = iterator.next();
 			if (rec.getByteValue(OPINDEX_COL) != opIndex) {
 				continue;
 			}
@@ -288,7 +293,7 @@ class BigRefListV0 extends RefList {
 	synchronized ReferenceDB getRef(Address refAddress, int opIndex) throws IOException {
 		LongField addrField = new LongField(addrMap.getKey(refAddress, false));
 		for (Field id : table.findRecords(addrField, ADDRESS_COL)) {
-			Record rec = table.getRecord(id);
+			DBRecord rec = table.getRecord(id);
 			if (rec.getByteValue(OPINDEX_COL) == (byte) opIndex) {
 				return getRef(rec);
 			}
@@ -325,7 +330,7 @@ class BigRefListV0 extends RefList {
 	synchronized boolean removeRef(Address deleteAddr, int opIndex) throws IOException {
 		LongField addrField = new LongField(addrMap.getKey(deleteAddr, false));
 		for (Field id : table.findRecords(addrField, ADDRESS_COL)) {
-			Record rec = table.getRecord(id);
+			DBRecord rec = table.getRecord(id);
 			if (rec.getByteValue(OPINDEX_COL) == (byte) opIndex) {
 				table.deleteRecord(id);
 				if (table.getRecordCount() == 0) {
@@ -369,7 +374,7 @@ class BigRefListV0 extends RefList {
 		Address changeAddr = isFrom ? ref.getToAddress() : ref.getFromAddress();
 		LongField addrField = new LongField(addrMap.getKey(changeAddr, false));
 		for (Field id : table.findRecords(addrField, ADDRESS_COL)) {
-			Record rec = table.getRecord(id);
+			DBRecord rec = table.getRecord(id);
 			if (rec.getByteValue(OPINDEX_COL) == (byte) opIndex) {
 				RefListFlagsV0 flags = new RefListFlagsV0(rec.getByteValue(FLAGS_COL));
 				if (flags.isPrimary() == isPrimary) {
@@ -391,7 +396,7 @@ class BigRefListV0 extends RefList {
 		Address changeAddr = isFrom ? ref.getToAddress() : ref.getFromAddress();
 		LongField addrField = new LongField(addrMap.getKey(changeAddr, false));
 		for (Field id : table.findRecords(addrField, ADDRESS_COL)) {
-			Record rec = table.getRecord(id);
+			DBRecord rec = table.getRecord(id);
 			if (rec.getByteValue(OPINDEX_COL) == (byte) opIndex) {
 				RefListFlagsV0 flags = new RefListFlagsV0(rec.getByteValue(FLAGS_COL));
 				if (flags.hasSymbolID() == hasSymbolID &&
@@ -417,7 +422,7 @@ class BigRefListV0 extends RefList {
 		}
 		LongField addrField = new LongField(addrMap.getKey(changeAddr, false));
 		for (Field id : table.findRecords(addrField, ADDRESS_COL)) {
-			Record rec = table.getRecord(id);
+			DBRecord rec = table.getRecord(id);
 			if (rec.getByteValue(OPINDEX_COL) == (byte) opIndex) {
 				if (refType.getValue() == rec.getByteValue(TYPE_COL)) {
 					return; // change not required

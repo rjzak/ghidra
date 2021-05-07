@@ -1,3 +1,18 @@
+/* ###
+ * IP: GHIDRA
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 apply plugin: 'eclipse'
 
 apply from: 'gradle/root/eclipse.gradle'
@@ -36,9 +51,9 @@ if ("32".equals(System.getProperty("sun.arch.data.model"))) {
  *  Define the location of bin repo
  *********************************************************************************/
 project.ext.GHIDRA_GROUP = "Z Ghidra"
-project.ext.BIN_REPO = file("${projectDir}/../ghidra.bin").absolutePath
 project.ext.ROOT_PROJECT_DIR = projectDir.absolutePath
-project.ext.BIN_REPO_PATH = BIN_REPO // TODO make path names consistent
+project.ext.BIN_REPO = file("${projectDir}/../ghidra.bin").absolutePath
+project.ext.DEPS_DIR = file("${projectDir}/dependencies")
 
 /*********************************************************************************
  *  Prevent forked Java processes from stealing focus
@@ -52,22 +67,23 @@ allprojects {
 /*********************************************************************************
  *  Use flat directory-style repository if flatRepo directory is present.
  *********************************************************************************/
-if (file("flatRepo").isDirectory()) {
+def flatRepo = file("${DEPS_DIR}/flatRepo") 
+if (flatRepo.isDirectory()) {
 	allprojects {
 		repositories {
 			mavenLocal()
 			mavenCentral()
 			jcenter()
-			flatDir name: "flat", dirs:["$rootProject.projectDir/flatRepo"]
+			flatDir name: "flat", dirs:["$flatRepo"]
 		}
 	}
 }
 else {	
-	/*File f = file("ghidra.repos.config")
+	File f = file("ghidra.repos.config")
 	if (!f.exists()) {
 		throw new GradleException("\n\n\n\tUnable to find the local maven repo." +  
-			"  Ensure you have created the ${f.getName()} file.\n\n\n");
-	}*/
+			"  Ensure you have created the ${flatRepo.getName()} directory or ${f.getName()} file.\n\n\n");
+	}
 }
 
 /****************************************************************************
@@ -273,6 +289,7 @@ String getCurrentPlatformName() {
 		
 	boolean isX86_32 = archName.equals("x86") || archName.equals("i386");
 	boolean isX86_64 = archName.equals("x86_64") || archName.equals("amd64");
+	boolean isAARCH_64 = archName.equals("aarch64");
 
 	if (osName.startsWith("Windows")) {
 		if (isX86_32) {
@@ -290,6 +307,9 @@ String getCurrentPlatformName() {
 	else if (osName.startsWith("Mac OS X")) {
 		if (isX86_64) {
 			return 'osx64'
+		}
+		if (isAARCH_64) {
+			return 'aarch64'
 		}
 	}
         else if (osName.startsWith("Haiku")) {

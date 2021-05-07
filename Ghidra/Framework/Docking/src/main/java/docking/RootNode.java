@@ -451,13 +451,12 @@ class RootNode extends WindowNode {
 		invalid = true;
 		detachChild();
 		setLastFocusedProviderInWindow(null);   // clear out stale last focused provider
-		Iterator<DetachedWindowNode> it = detachedWindows.iterator();
-		while (it.hasNext()) {
-			DetachedWindowNode windowNode = it.next();
+		List<DetachedWindowNode> copy = new ArrayList<>(detachedWindows);
+		detachedWindows.clear();
+		for (DetachedWindowNode windowNode : copy) {
 			notifyWindowRemoved(windowNode);
 			windowNode.dispose();
 		}
-		detachedWindows.clear();
 
 		int x = Integer.parseInt(rootNodeElement.getAttributeValue("X_POS"));
 		int y = Integer.parseInt(rootNodeElement.getAttributeValue("Y_POS"));
@@ -577,7 +576,7 @@ class RootNode extends WindowNode {
 			return;
 		}
 
-		statusBar.setStatusText(text, getMainWindow().isActive());
+		statusBar.setStatusText(text);
 
 		Iterator<DetachedWindowNode> iter = detachedWindows.iterator();
 		while (iter.hasNext()) {

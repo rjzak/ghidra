@@ -55,13 +55,47 @@ public class TaskDialog extends DialogComponentProvider implements TaskMonitor {
 
 	public final static int DEFAULT_WIDTH = 275;
 
+	/*
+	 * Note: all paths of finishing should end up calling this runnable.
+	 * 
+	 * Workflow:
+	 * 
+	 * Dialog Close Button Pressed:
+	 * 	-calls cancelCallback()
+	 *  -calls verifyCancel runnable
+	 *  -calls iternalCancel()
+	 *  -triggers taskProcessed()
+	 *  -calls closeDialog runnable
+	 *  
+	 * Cancel Button Pressed:
+	 * 	-(same as Dialog Close Button Pressed)
+	 * 
+	 * Task Monitor Stop Button Pressed:
+	 *  -triggers taskProcessed()
+	 *  -calls closeDialog runnable
+	 *  
+	 * Public API dispose() is Called:
+	 *  -calls iternalCancel()
+	 *  -triggers taskProcessed()
+	 *  -calls closeDialog runnable
+	 *  
+	 * Task Monitor Cancelled by API:
+	 *  -triggers taskProcessed()
+	 *  -calls closeDialog runnable
+	 *  
+	 * Task Finishes Normally:
+	 *  -triggers taskProcessed()
+	 *  -calls closeDialog runnable
+	 * 
+	 * 
+	 */
 	private Runnable closeDialog = () -> {
 		close();
-		dispose();
+		cleanup();
 	};
 	private Runnable verifyCancel = () -> {
 		if (promptToVerifyCancel()) {
-			cancel();
+			internalCancel();
 		}
 	};
 
@@ -171,11 +205,26 @@ public class TaskDialog extends DialogComponentProvider implements TaskMonitor {
 		return userSaysYes;
 	}
 
+	private boolean isInstalled(Component c) {
+		Component[] components = mainPanel.getComponents();
+		for (Component component : components) {
+			if (c == component) {
+				return true;
+			}
+		}
+		return false;
+	}
+
 	/**
 	 * Adds the panel that contains the progress bar to the dialog
 	 */
 	private void installProgressMonitor() {
 		Swing.runIfSwingOrRunLater(() -> {
+
+			if (isInstalled(monitorComponent)) {
+				return;
+			}
+
 			mainPanel.removeAll();
 			mainPanel.add(monitorComponent, BorderLayout.CENTER);
 			repack();
@@ -188,6 +237,11 @@ public class TaskDialog extends DialogComponentProvider implements TaskMonitor {
 	 */
 	private void installActivityDisplay() {
 		Swing.runIfSwingOrRunLater(() -> {
+
+			if (isInstalled(activityPanel)) {
+				return;
+			}
+
 			mainPanel.removeAll();
 			mainPanel.add(activityPanel, BorderLayout.CENTER);
 			repack();
@@ -196,6 +250,7 @@ public class TaskDialog extends DialogComponentProvider implements TaskMonitor {
 
 	@Override
 	protected void cancelCallback() {
+		// note: this is called from the cancel button and when the dialog close button is pressed
 		Swing.runLater(verifyCancel);
 	}
 
@@ -211,11 +266,10 @@ public class TaskDialog extends DialogComponentProvider implements TaskMonitor {
 	}
 
 	/**
-	 * Called after the task has been executed
+	 * Called after the task has been executed or when the task is cancelled
 	 */
 	public void taskProcessed() {
 		finished.countDown();
-		monitorComponent.notifyChangeListeners();
 		Swing.runLater(closeDialog);
 	}
 
@@ -305,8 +359,14 @@ public class TaskDialog extends DialogComponentProvider implements TaskMonitor {
 		}
 	}
 
+	/**
+	 * Cancels the task and closes this dialog
+	 */
 	public void dispose() {
-		cancel();
+		internalCancel();
+	}
+
+	private void cleanup() {
 		showTimer.cancel();
 		messageUpdater.dispose();
 	}
@@ -339,15 +399,21 @@ public class TaskDialog extends DialogComponentProvider implements TaskMonitor {
 	@Override
 	public void initialize(long max) {
 
-		if (!supportsProgress) {
+		if (max <= 0) {
 			return;
 		}
 
-		if (!monitorComponent.isShowing()) {
-			installProgressMonitor();
+		monitorComponent.initialize(max);
+		if (!supportsProgress) {
+			supportsProgress = true;
+			setIndeterminate(false);
 		}
 
-		monitorComponent.initialize(max);
+		// Note: it is not clear why we only wish to show progress if the monitor is not 
+		// visible.  This seems wrong.   If someone knows, please update this code.
+		//if (!monitorComponent.isShowing()) {
+		installProgressMonitor();
+		//}
 	}
 
 	@Override
@@ -364,6 +430,17 @@ public class TaskDialog extends DialogComponentProvider implements TaskMonitor {
 	public void setIndeterminate(boolean indeterminate) {
 		supportsProgress = !indeterminate;
 		monitorComponent.setIndeterminate(indeterminate);
+
+		// Assumption: if the client calls this method to show progress, then we should honor 
+		// that request.  If we find that nested monitor usage causes dialogs to incorrectly
+		// toggle monitors, then we need to update those clients to use a wrapping style
+		// monitor that prevents the behavior.
+		if (supportsProgress) {
+			installProgressMonitor();
+		}
+		else {
+			installActivityDisplay();
+		}
 	}
 
 	@Override
@@ -378,11 +455,15 @@ public class TaskDialog extends DialogComponentProvider implements TaskMonitor {
 
 	@Override
 	public synchronized void cancel() {
+		internalCancel();
+	}
+
+	private void internalCancel() {
 		if (monitorComponent.isCancelled()) {
 			return;
 		}
-		// Mark as cancelled, must be detected by task which should terminate
-		// and invoke setCompleted which will dismiss dialog.
+
+		// mark as cancelled; the task will terminate and the callback will dismiss this dialog
 		monitorComponent.cancel();
 	}
 

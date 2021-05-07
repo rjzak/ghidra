@@ -15,8 +15,7 @@
  */
 package ghidra.program.model.symbol;
 
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 
 import ghidra.program.model.address.*;
 import ghidra.program.model.listing.*;
@@ -504,7 +503,7 @@ public interface SymbolTable {
 	 * @param name name of the namespace
 	 * @param source the source of this class namespace's symbol
 	 * @return new class namespace
-	 * @throws DuplicateNameException thrown if another non function or lable symbol exists with the given name
+	 * @throws DuplicateNameException thrown if another non function or label symbol exists with the given name
 	 * @throws InvalidInputException throw if the name has invalid characters or is null
 	 * @throws IllegalArgumentException if you try to set the source to 'Symbol.DEFAULT'.
 	 */
@@ -523,7 +522,7 @@ public interface SymbolTable {
 	 * @param source the source of this external library's symbol
 	 * @return the new Library namespace.
 	 * @throws IllegalArgumentException if you try to set the source to 'Symbol.DEFAULT'.
-	 * @throws DuplicateNameException thrown if another non function or lable symbol exists with the given name
+	 * @throws DuplicateNameException thrown if another non function or label symbol exists with the given name
 	 */
 	public Library createExternalLibrary(String name, SourceType source)
 			throws DuplicateNameException, InvalidInputException;
@@ -534,7 +533,7 @@ public interface SymbolTable {
 	 * @param name the name of the new namespace
 	 * @param source the source of this namespace's symbol
 	 * @return the new Namespace object.
-	 * @throws DuplicateNameException thrown if another non function or lable symbol exists with the given name
+	 * @throws DuplicateNameException thrown if another non function or label symbol exists with the given name
 	 * @throws InvalidInputException if the name is invalid.
 	 * @throws IllegalArgumentException if you try to set the source to 'Symbol.DEFAULT'.
 	 */
@@ -542,14 +541,31 @@ public interface SymbolTable {
 			throws DuplicateNameException, InvalidInputException;
 
 	/**
-	 * Creates a Symbol that is just a placeholder for use when trying to find symbols by using
-	 * {@link Symbol#getID()}.   This is useful for locating symbols in Java collections when
-	 * a symbol has been deleted and the only remaining information is that symbol's ID.
+	 * Converts the given namespace to a class namespace
 	 * 
-	 * @param address the address of the symbol
-	 * @param id the id of the symbol
-	 * @return the fake symbol
+	 * @param namespace the namespace to convert
+	 * @return the new class
+	 * @throws IllegalArgumentException if the given parent namespace is from a different program
+	 *         than that of this symbol table
+	 * @throws ConcurrentModificationException if the given parent namespace has been deleted
 	 */
-	public Symbol createSymbolPlaceholder(Address address, long id);
+	public GhidraClass convertNamespaceToClass(Namespace namespace);
 
+	/**
+	 * Gets an existing namespace with the given name in the given parent.  If no namespace exists,
+	 * then one will be created.
+	 *  
+	 * @param parent the parent namespace
+	 * @param name the namespace name
+	 * @param source the source type for the namespace if one is created
+	 * @return the namespace
+	 * @throws DuplicateNameException thrown if another non function or label symbol exists with 
+	 *         the given name
+	 * @throws InvalidInputException if the name is invalid
+	 * @throws IllegalArgumentException if the given parent namespace is from a different program
+	 *         than that of this symbol table
+	 * @throws ConcurrentModificationException if the given parent namespace has been deleted
+	 */
+	public Namespace getOrCreateNameSpace(Namespace parent, String name, SourceType source)
+			throws DuplicateNameException, InvalidInputException;
 }

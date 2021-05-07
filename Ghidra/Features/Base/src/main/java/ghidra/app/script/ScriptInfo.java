@@ -20,6 +20,7 @@ import static ghidra.util.HTMLUtilities.*;
 import java.io.*;
 import java.util.List;
 import java.util.StringTokenizer;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import javax.swing.ImageIcon;
@@ -46,9 +47,6 @@ public class ScriptInfo {
 	static final String AT_KEYBINDING = "@keybinding";
 	static final String AT_MENUPATH = "@menupath";
 	static final String AT_TOOLBAR = "@toolbar";
-
-	private static final Pattern DOCUMENTATION_START = Pattern.compile("/\\*");
-	private static final Pattern DOCUMENTATION_END = Pattern.compile("\\*/");
 
 	// omit from METADATA to avoid pre-populating in new scripts
 	private static final String AT_IMPORTPACKAGE = "@importpackage";
@@ -186,37 +184,44 @@ public class ScriptInfo {
 
 		init();
 
-		BufferedReader reader = null;
-		try {
-			StringBuffer buffer = new StringBuffer();
+		String commentPrefix = provider.getCommentCharacter();
+
+		// Note that skipping certification header presumes that the header
+		// is intact with an appropriate start and end
+		String certifyHeaderStart = provider.getCertifyHeaderStart();
+		boolean allowCertifyHeader = (certifyHeaderStart != null);
+
+		try (BufferedReader reader =
+			new BufferedReader(new InputStreamReader(sourceFile.getInputStream()))) {
+			StringBuilder buffer = new StringBuilder();
 			boolean hitAtSign = false;
-			reader = new BufferedReader(new InputStreamReader(sourceFile.getInputStream()));
 			while (true) {
 				String line = reader.readLine();
 				if (line == null) {
 					break;
 				}
 
-				if (DOCUMENTATION_START.matcher(line).find()) {
-					while (line != null && !DOCUMENTATION_END.matcher(line).find()) {
-						line = reader.readLine();
-					}
+				if (allowCertifyHeader && skipCertifyHeader(reader, line)) {
+					allowCertifyHeader = false;
 					continue;
 				}
 
-				String commentPrefix = provider.getCommentCharacter();
+				if (parseBlockComment(reader, line)) {
+					allowCertifyHeader = false;
+					continue; // read block comment; move to next line
+				}
 
 				if (line.startsWith(commentPrefix)) {
-					line = line.substring(commentPrefix.length()).trim();
+					allowCertifyHeader = false;
 
+					line = line.substring(commentPrefix.length()).trim();
 					if (line.startsWith("@")) {
 						hitAtSign = true;
 						parseMetaDataLine(line);
 					}
 					else if (!hitAtSign) {
-						buffer.append(line);
-						buffer.append(' ');
-						buffer.append('\n');
+						// only consume line comments that come before metadata
+						buffer.append(line).append(' ').append('\n');
 					}
 				}
 				else if (line.trim().isEmpty()) {
@@ -233,16 +238,62 @@ public class ScriptInfo {
 		catch (IOException e) {
 			Msg.debug(this, "Unexpected exception reading script: " + sourceFile, e);
 		}
-		finally {
-			if (reader != null) {
-				try {
-					reader.close();
-				}
-				catch (IOException e) {
-					// don't care; we tried
-				}
-			}
+	}
+
+	private boolean skipCertifyHeader(BufferedReader reader, String line) throws IOException {
+
+		// Note that skipping certification header presumes that the header
+		// is intact with an appropriate start and end
+		String certifyHeaderStart = provider.getCertifyHeaderStart();
+		if (certifyHeaderStart == null) {
+			return false;
 		}
+
+		if (!line.startsWith(certifyHeaderStart)) {
+			return false;
+		}
+
+		String certifyHeaderEnd = provider.getCertifyHeaderEnd();
+		String certifyHeaderBodyPrefix = provider.getCertificationBodyPrefix();
+		certifyHeaderBodyPrefix = certifyHeaderBodyPrefix == null ? "" : certifyHeaderBodyPrefix;
+
+		while ((line = reader.readLine()) != null) {
+
+			// Skip past certification header if found
+			String trimLine = line.trim();
+			if (trimLine.startsWith(certifyHeaderEnd)) {
+				return true;
+			}
+
+			if (trimLine.startsWith(certifyHeaderBodyPrefix)) {
+				continue; // skip certification header body
+			}
+
+			// broken certification header - unexpected line
+			Msg.error(this,
+				"Script contains invalid certification header: " + getName());
+		}
+		return false;
+	}
+
+	private boolean parseBlockComment(BufferedReader reader, String line) throws IOException {
+		Pattern blockStart = provider.getBlockCommentStart();
+		Pattern blockEnd = provider.getBlockCommentEnd();
+
+		if (blockStart == null || blockEnd == null) {
+			return false;
+		}
+
+		Matcher startMatcher = blockStart.matcher(line);
+		if (startMatcher.find()) {
+			int lastOffset = startMatcher.end();
+			while (line != null && !blockEnd.matcher(line).find(lastOffset)) {
+				line = reader.readLine();
+				lastOffset = 0;
+			}
+			return true;
+		}
+		return false;
 	}
 
 	private void parseMetaDataLine(String line) {
