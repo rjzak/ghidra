@@ -45,7 +45,7 @@ dependencies {
 	}
 	if (os.isMacOsX()) {
     	protocArtifact 'com.google.protobuf:protoc:3.11.1:osx-x86_64@exe'
-    }
+   	}
 
 	compile 'com.google.protobuf:protobuf-java:3.11.1'
 	compile project(':Framework-AsyncComm')
@@ -71,13 +71,21 @@ task generateProto {
 	inputs.files(src)
 	dependsOn(configurations.protocArtifact)
 	doLast {
-		def exe = configurations.protocArtifact.first()
-		if (!os.isWindows()) {
-			exe.setExecutable(true)
-		}
-		exec {
-			commandLine exe, "--java_out=$outdir", "-I$srcdir"
-			args src
+		if (System.getProperty("os.name").equals("Haiku")) {
+			exec {
+				commandLine "/bin/protoc", "--java_out=$outdir", "-I$srcdir"
+				args src
+			}
+		} else {
+			def exe = configurations.protocArtifact.first()
+			if (!os.isWindows()) {
+				exe.setExecutable(true)
+			}
+		
+			exec {
+				commandLine exe, "--java_out=$outdir", "-I$srcdir"
+				args src
+			}
 		}
 	}
 }
