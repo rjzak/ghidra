@@ -1,0 +1,27 @@
+name GhidraLauncher
+version 1.0.0-1
+architecture x86_64
+
+summary "Launcher for the Ghidra Reverse Engineering Framework"
+description "Ghidra is an open-source program & framework for reverse engineering, decompiling, and debugging executables."
+packager "Richard Zak<richard.j.zak@gmail.com>"
+vendor "United States Government"
+copyrights "United States Government"
+licenses "Apache v2"
+
+urls {
+	https://github.com/rjzak/ghidra/tree/9.0.4_haiku64
+}
+
+source-urls {
+	https://github.com/rjzak/ghidra
+	https://github.com/NationalSecurityAgency/ghidra
+}
+
+provides {
+	GhidraLauncher = 1.0.0
+}
+
+requires {
+	Ghidra > 9.0
+}
