@@ -25,4 +25,5 @@ provides {
 requires {
 	openjdk11_jre >= 11.0
 	openjdk11 >= 11.0
+	gdb
 }
