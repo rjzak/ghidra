@@ -1,0 +1,18 @@
+cmake_minimum_required(VERSION 3.0)
+project(GhidraLauncher CXX)
+set(CMAKE_CXX_STANDARD 11)
+
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release)
+    message(STATUS "Building for Release")
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -0fast")
+elseif(CMAKE_BUILD_TYPE MATCHES Debug)
+    message(STATUS "Building for Debug")
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -DDEBUG -ggdb -pg")
+endif()
+
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${EXTRA_FLAGS} -Wall")
+add_executable(GhidraLauncher main.cpp)
+target_include_directories(GhidraLauncher PUBLIC /boot/system/lib/openjdk11/include/ /boot/system/lib/openjdk11/include/haiku/)
+target_link_directories(GhidraLauncher PUBLIC /boot/system/lib/openjdk11/lib/server/)
+target_link_libraries(GhidraLauncher PUBLIC jvm)
